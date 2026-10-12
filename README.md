@@ -2,6 +2,9 @@
 
 Mobile-first PWA for tracking monthly **money in** and **money out** for one house—built for clear totals, history, charts, and photo attachments. Data stays in the browser (IndexedDB).
 
+**Live:** [https://expendimonth.pages.dev](https://expendimonth.pages.dev)  
+**GitHub:** [github.com/TawfiqAhmedAbir/Expendimonth](https://github.com/TawfiqAhmedAbir/Expendimonth)
+
 ## Local development
 
 ```bash
