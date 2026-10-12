@@ -1,41 +1,49 @@
+import { ChevronRight } from 'lucide-react'
 import { formatMoney } from '../domain/calc'
 import { getCategoryLabel } from '../domain/categories'
 import type { LineItem, UserCategory } from '../domain/types'
 import { t } from '../i18n'
+import { CategoryIcon } from './CategoryIcon'
 
 type Props = {
   line: LineItem
   categories: UserCategory[]
   currencyCode: string
   locale: string
-  onEdit: () => void
-  onDelete: () => void
+  /** Tapping the row opens the editor (which also offers Delete). */
+  onEdit?: () => void
   readOnly?: boolean
 }
 
-export function LineItemRow({ line, categories, currencyCode, locale, onEdit, onDelete, readOnly }: Props) {
+export function LineItemRow({ line, categories, currencyCode, locale, onEdit, readOnly }: Props) {
+  const cat = categories.find((c) => c.id === line.categoryId)
+  const label = getCategoryLabel(line.categoryId, categories)
+  const amount = `${line.type === 'out' ? '−' : '+'}${formatMoney(line.amountCents, currencyCode, locale)}`
+  const canEdit = !readOnly && !!onEdit
+
+  const body = (
+    <>
+      <div className="line__icon">
+        <CategoryIcon name={cat?.icon} />
+      </div>
+      <div className="grow">
+        <div className="line__title">{label}</div>
+        {line.note ? <div className="line__note">{line.note}</div> : null}
+      </div>
+      <div className={`line__amount money money--${line.type}`}>{amount}</div>
+      {canEdit ? <ChevronRight size={18} className="line__chev" aria-hidden /> : null}
+    </>
+  )
+
   return (
-    <div className="line-row">
-      <div className="line-row__meta">
-        <div className="line-row__cat">{getCategoryLabel(line.categoryId, categories)}</div>
-        {line.note ? <div className="line-row__note">{line.note}</div> : null}
-      </div>
-      <div
-        className={`line-row__amount line-row__amount--${line.type === 'in' ? 'in' : 'out'}`}
-      >
-        {line.type === 'out' ? '−' : '+'}
-        {formatMoney(line.amountCents, currencyCode, locale)}
-      </div>
-      {!readOnly ? (
-        <div className="btn-row" style={{ flexDirection: 'column' }}>
-          <button type="button" className="btn btn--ghost" style={{ minHeight: '2.5rem', padding: '0 0.75rem' }} onClick={onEdit}>
-            {t('line.edit', locale)}
-          </button>
-          <button type="button" className="btn btn--ghost" style={{ minHeight: '2.5rem', padding: '0 0.75rem' }} onClick={onDelete}>
-            {t('line.delete', locale)}
-          </button>
-        </div>
-      ) : null}
+    <div className={`line${readOnly ? ' line--muted' : ''}`}>
+      {canEdit ? (
+        <button type="button" className="line__main" onClick={onEdit} aria-label={`${t('line.edit', locale)}: ${label}, ${amount}`}>
+          {body}
+        </button>
+      ) : (
+        <div className="line__main">{body}</div>
+      )}
     </div>
   )
 }

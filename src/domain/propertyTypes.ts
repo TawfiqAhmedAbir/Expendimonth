@@ -1,4 +1,4 @@
-import type { PropertyType, Settings } from './types'
+import type { Property, PropertyType } from './types'
 import { t } from '../i18n'
 
 export const PROPERTY_TYPE_OPTIONS: { id: PropertyType; labelKey: string }[] = [
@@ -9,10 +9,20 @@ export const PROPERTY_TYPE_OPTIONS: { id: PropertyType; labelKey: string }[] = [
   { id: 'other', labelKey: 'propertyType.other' },
 ]
 
-export function propertyTypeLabel(settings: Settings, locale = 'en'): string {
-  if (settings.propertyType === 'other' && settings.propertyTypeCustom.trim()) {
-    return settings.propertyTypeCustom.trim()
-  }
-  const opt = PROPERTY_TYPE_OPTIONS.find((o) => o.id === settings.propertyType)
-  return opt ? t(opt.labelKey, locale) : settings.propertyType
+export function propertyTypeLabel(
+  p: Pick<Property, 'type' | 'typeCustom'>,
+  locale = 'en',
+): string {
+  if (p.type === 'other' && p.typeCustom.trim()) return p.typeCustom.trim()
+  const opt = PROPERTY_TYPE_OPTIONS.find((o) => o.id === p.type)
+  return opt ? t(opt.labelKey, locale) : p.type
 }
+
+export const CURRENCIES = [
+  { code: 'BDT', label: 'Bangladeshi taka (BDT)' },
+  { code: 'EUR', label: 'Euro (EUR)' },
+  { code: 'GBP', label: 'British pound (GBP)' },
+  { code: 'INR', label: 'Indian rupee (INR)' },
+  { code: 'MAD', label: 'Moroccan dirham (MAD)' },
+  { code: 'USD', label: 'US dollar (USD)' },
+]

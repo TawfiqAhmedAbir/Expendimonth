@@ -2,35 +2,46 @@
 
 ## What this is
 
-Mobile-first PWA for one house: monthly **money in**, **money out**, and **what's left**, with charts, history, paper reconciliation, and photo attachment. Built for a non-technical user (large type, plain language).
+Mobile-first PWA for a non-technical user (large type, plain language) to track monthly **money in**, **money out**, and **what's left** across one or more properties (house, land, vehicle, business). Charts, history timeline, paper reconciliation, photo compare, printable report, optional PIN. All data local.
 
 ## Goals
 
 - Correct monthly totals and easy history browsing
-- Visual dashboard (hero numbers + bar charts)
+- Visual dashboard (ring + hero numbers + bar charts)
 - Local-only data with JSON backup export
 
 ## How I want the agent to work
 
-- Keep UX accessible: 18px+ body, 48px touch targets, green in / coral out
-- Minimize scope; one property until explicitly expanded
+- Keep UX accessible: 18px+ body, 48px touch targets, green only for "in", coral for "out", teal accent
+- Use the in-repo design kit (`src/design-kit/`): tokens → primitives.css → `Primitives.tsx`; no ad-hoc colours
+- Smoke-test in a 390px viewport before committing UI changes
 - Do not commit unless asked
 
 ## Current focus
 
-- v1 scaffold: setup wizard, home/month views, months list with 12-month trend, more/export
+- Design overhaul (3 phases) shipped and deployed to https://expendimonth.pages.dev
+- Next candidates: French strings (`src/i18n/fr.json`), real-device PWA install test, GitHub Actions deploy once `CLOUDFLARE_API_TOKEN` secret is added
 
 ## Decisions already made
 
 - English UI; i18n keys ready (`src/i18n/`), French stub empty
-- Onboarding: user name → property name → type (house/land/vehicle/business/other+custom) → currency
-- Home is property dashboard; month ledger at `/month/:yearMonth`
-- User-created categories (IndexedDB `categories`); no preset rent/electricity chips
-- Currency chosen on first launch (not hardcoded)
-- IndexedDB for months/lines/photos/categories; settings in localStorage
-- Running balance supported in domain calc; UI emphasizes monthly net
-- Colour theme: warm off-white canvas, sage green in, coral out, teal accent
+- Onboarding: user name → property name → type (house/land/vehicle/business/other+custom) → currency (+ optional opening balance, colour)
+- **Multi-property**: IndexedDB v3 with `properties` store; months keyed `${propertyId}:${yearMonth}`; `PropertySwitcher` in the top bar; v1/v2 data migrates into `prop-legacy`
+- Settings in localStorage `expendimonth-settings`: `userName, locale, activePropertyId, theme, pinHash/pinSalt, lastExportAt, coachDismissed`
+- Home = property command centre (StatRing net, in/out, insight vs last month, tiles); month ledger at `/month/:yearMonth`
+- User-created categories per property; no presets. Chips remember last amount; long-press to rename / pick icon
+- Amount entry via keypad sheet with `+` chaining; tap a line to edit, Delete lives inside the edit sheet (with Undo toast)
+- Month status: `empty → open → checked → done`; `CloseMonthFlow` = review → paper-says → confirm (padlock)
+- Photo compare page (`/month/:ym/compare`) with pinch-zoom and inline mismatch
+- Months timeline with filters (all/done/mismatch/empty), search, sparklines; `/year/:year` summary
+- Print-based report at `/report/:scope/:id` (always prints light)
+- PIN: SHA-256(salt:pin), session unlock, auto-lock 60s hidden
+- Dark mode via `[data-theme='dark']`; font Manrope; icons lucide-react
+- Sheets portal to `document.body` (topbar `backdrop-filter` would otherwise trap `position: fixed`)
+- Currency shown with narrow symbol (৳, €, £…), tabular numerals
 
 ## Tools & connections
 
-- Vite, React, React Router, Recharts, vite-plugin-pwa, Vitest
+- Vite 8, React 19, React Router 7, Recharts 3, idb, vite-plugin-pwa, Vitest, lucide-react, @fontsource-variable/manrope
+- GitHub `TawfiqAhmedAbir/Expendimonth` (main) → Cloudflare Pages project `expendimonth`
+- Deploy: `npm run build && npx wrangler pages deploy dist --project-name=expendimonth --branch=main --commit-dirty=true`

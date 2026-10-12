@@ -13,8 +13,8 @@ export default defineConfig({
         name: 'Expendimonth',
         short_name: 'Expendimonth',
         description: 'Monthly house money in and out',
-        theme_color: '#1e4d5c',
-        background_color: '#f7f3ed',
+        theme_color: '#1f4f5e',
+        background_color: '#f6f2ec',
         display: 'standalone',
         start_url: '/',
         icons: [

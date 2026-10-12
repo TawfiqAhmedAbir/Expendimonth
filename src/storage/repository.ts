@@ -3,87 +3,49 @@ import type {
   BackupPayload,
   LineItem,
   MonthRecord,
-  Settings,
+  MonthStatus,
 } from '../domain/types'
 import { deriveMonthStatus } from '../domain/calc'
-import { listCategories } from './categories'
-import { getDb } from './db'
+import { getDb, monthIdFor } from './db'
+import { listProperties } from './properties'
+import { loadSettings, patchSettings } from './settings'
 
-const SETTINGS_KEY = 'expendimonth-settings'
-
-const defaultSettings = (): Settings => ({
-  userName: '',
-  propertyName: '',
-  propertyType: 'house',
-  propertyTypeCustom: '',
-  currencyCode: '',
-  openingBalanceCents: 0,
-  locale: 'en',
-})
-
-type LegacySettings = Settings & { houseName?: string }
-
-export function loadSettings(): Settings {
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY)
-    if (!raw) return defaultSettings()
-    const parsed = JSON.parse(raw) as LegacySettings
-    const base = defaultSettings()
-    const propertyName = parsed.propertyName?.trim() || parsed.houseName?.trim() || ''
-    return {
-      ...base,
-      ...parsed,
-      propertyName,
-      userName: parsed.userName?.trim() ?? '',
-      propertyType: parsed.propertyType ?? 'house',
-      propertyTypeCustom: parsed.propertyTypeCustom?.trim() ?? '',
-    }
-  } catch {
-    return defaultSettings()
-  }
-}
-
-export function saveSettings(settings: Settings): void {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
-}
+export { loadSettings, saveSettings, patchSettings } from './settings'
 
 export function isSetupComplete(): boolean {
   const s = loadSettings()
-  if (!s.currencyCode || !s.userName.trim() || !s.propertyName.trim()) return false
-  if (s.propertyType === 'other' && !s.propertyTypeCustom.trim()) return false
-  return true
+  return Boolean(s.userName.trim() && s.activePropertyId)
 }
 
-function monthIdFor(yearMonth: string): string {
-  return `month-${yearMonth}`
-}
+// ---------- Months ----------
 
-export async function getOrCreateMonth(yearMonth: string): Promise<MonthRecord> {
+export async function getOrCreateMonth(propertyId: string, yearMonth: string): Promise<MonthRecord> {
   const db = await getDb()
-  const id = monthIdFor(yearMonth)
+  const id = monthIdFor(propertyId, yearMonth)
   const existing = await db.get('months', id)
   if (existing) return existing
-
   const record: MonthRecord = {
     id,
+    propertyId,
     yearMonth,
     status: 'empty',
     reconcileInCents: null,
     reconcileOutCents: null,
+    closedAt: null,
   }
   await db.put('months', record)
   return record
 }
 
-export async function listMonths(): Promise<MonthRecord[]> {
+export async function listMonths(propertyId: string): Promise<MonthRecord[]> {
   const db = await getDb()
-  const all = await db.getAll('months')
+  const all = await db.getAllFromIndex('months', 'by-propertyId', propertyId)
   return all.sort((a, b) => a.yearMonth.localeCompare(b.yearMonth))
 }
 
-export async function getMonthByYearMonth(yearMonth: string): Promise<MonthRecord | undefined> {
+export async function getMonth(monthId: string): Promise<MonthRecord | undefined> {
   const db = await getDb()
-  return db.get('months', monthIdFor(yearMonth))
+  return db.get('months', monthId)
 }
 
 async function refreshMonthStatus(monthId: string): Promise<void> {
@@ -91,12 +53,33 @@ async function refreshMonthStatus(monthId: string): Promise<void> {
   const month = await db.get('months', monthId)
   if (!month) return
   const lines = await getLinesForMonth(monthId)
-  const markedDone = month.status === 'done'
-  const nextStatus = deriveMonthStatus(lines, markedDone)
-  if (nextStatus !== month.status) {
-    await db.put('months', { ...month, status: nextStatus })
-  }
+  const next = deriveMonthStatus(lines, month.status)
+  if (next !== month.status) await db.put('months', { ...month, status: next })
 }
+
+export async function setMonthStatus(monthId: string, status: MonthStatus): Promise<void> {
+  const db = await getDb()
+  const month = await db.get('months', monthId)
+  if (!month) return
+  await db.put('months', {
+    ...month,
+    status,
+    closedAt: status === 'done' ? Date.now() : null,
+  })
+}
+
+export async function setMonthReconcile(
+  monthId: string,
+  reconcileInCents: number | null,
+  reconcileOutCents: number | null,
+): Promise<void> {
+  const db = await getDb()
+  const month = await db.get('months', monthId)
+  if (!month) return
+  await db.put('months', { ...month, reconcileInCents, reconcileOutCents })
+}
+
+// ---------- Lines ----------
 
 export async function getLinesForMonth(monthId: string): Promise<LineItem[]> {
   const db = await getDb()
@@ -109,19 +92,25 @@ export async function addLine(
   partial: Omit<LineItem, 'id' | 'monthId' | 'createdAt'>,
 ): Promise<LineItem> {
   const db = await getDb()
-  const line: LineItem = {
-    id: crypto.randomUUID(),
-    monthId,
-    createdAt: Date.now(),
-    ...partial,
-  }
+  const line: LineItem = { id: crypto.randomUUID(), monthId, createdAt: Date.now(), ...partial }
   await db.put('lines', line)
-  const month = await db.get('months', monthId)
-  if (month?.status === 'done') {
-    await db.put('months', { ...month, status: 'open' })
-  }
   await refreshMonthStatus(monthId)
   return line
+}
+
+export async function addLines(
+  monthId: string,
+  partials: Omit<LineItem, 'id' | 'monthId' | 'createdAt'>[],
+): Promise<number> {
+  const db = await getDb()
+  const base = Date.now()
+  await Promise.all(
+    partials.map((p, i) =>
+      db.put('lines', { id: crypto.randomUUID(), monthId, createdAt: base + i, ...p }),
+    ),
+  )
+  await refreshMonthStatus(monthId)
+  return partials.length
 }
 
 export async function updateLine(line: LineItem): Promise<void> {
@@ -145,48 +134,24 @@ export async function restoreLine(line: LineItem): Promise<void> {
   await refreshMonthStatus(line.monthId)
 }
 
-export async function copyLinesFromMonth(sourceMonthId: string, targetMonthId: string): Promise<number> {
-  const source = await getLinesForMonth(sourceMonthId)
-  if (source.length === 0) return 0
+/** All lines for a property grouped by monthId. */
+export async function getLinesGrouped(propertyId: string): Promise<Map<string, LineItem[]>> {
   const db = await getDb()
-  let count = 0
-  for (const s of source) {
-    const copy: LineItem = {
-      ...s,
-      id: crypto.randomUUID(),
-      monthId: targetMonthId,
-      createdAt: Date.now() + count,
-    }
-    await db.put('lines', copy)
-    count++
-  }
-  await refreshMonthStatus(targetMonthId)
-  return count
+  const months = await db.getAllFromIndex('months', 'by-propertyId', propertyId)
+  const map = new Map<string, LineItem[]>()
+  await Promise.all(
+    months.map(async (m) => {
+      const lines = await db.getAllFromIndex('lines', 'by-monthId', m.id)
+      map.set(
+        m.id,
+        lines.sort((a, b) => a.createdAt - b.createdAt),
+      )
+    }),
+  )
+  return map
 }
 
-export async function setMonthDone(monthId: string, done: boolean): Promise<void> {
-  const db = await getDb()
-  const month = await db.get('months', monthId)
-  if (!month) return
-  const lines = await getLinesForMonth(monthId)
-  const status = done ? 'done' : deriveMonthStatus(lines, false)
-  await db.put('months', { ...month, status })
-}
-
-export async function setMonthReconcile(
-  monthId: string,
-  reconcileInCents: number | null,
-  reconcileOutCents: number | null,
-): Promise<void> {
-  const db = await getDb()
-  const month = await db.get('months', monthId)
-  if (!month) return
-  await db.put('months', {
-    ...month,
-    reconcileInCents,
-    reconcileOutCents,
-  })
-}
+// ---------- Attachments ----------
 
 export async function saveAttachment(monthId: string, file: File): Promise<void> {
   const db = await getDb()
@@ -204,50 +169,39 @@ export async function getAttachment(monthId: string): Promise<AttachmentRecord |
   return db.get('attachments', monthId)
 }
 
+export async function deleteAttachment(monthId: string): Promise<void> {
+  const db = await getDb()
+  await db.delete('attachments', monthId)
+}
+
+// ---------- Backup ----------
+
 export async function buildBackup(): Promise<BackupPayload> {
   const db = await getDb()
-  const months = await db.getAll('months')
-  const lines = await db.getAll('lines')
-  const attachmentsRaw = await db.getAll('attachments')
+  const [properties, months, lines, categories, attachmentsRaw] = await Promise.all([
+    listProperties(),
+    db.getAll('months'),
+    db.getAll('lines'),
+    db.getAll('categories'),
+    db.getAll('attachments'),
+  ])
   const attachments = await Promise.all(
     attachmentsRaw.map(async (a) => {
-      const buf = await a.blob.arrayBuffer()
-      const bytes = new Uint8Array(buf)
+      const bytes = new Uint8Array(await a.blob.arrayBuffer())
       let binary = ''
       for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!)
-      return {
-        monthId: a.monthId,
-        mimeType: a.mimeType,
-        base64: btoa(binary),
-      }
+      return { monthId: a.monthId, mimeType: a.mimeType, base64: btoa(binary) }
     }),
   )
-  const categories = await listCategories()
+  patchSettings({ lastExportAt: Date.now() })
   return {
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     settings: loadSettings(),
+    properties,
     categories,
     months,
     lines,
     attachments,
   }
-}
-
-export async function getAllLinesGrouped(): Promise<Map<string, LineItem[]>> {
-  const db = await getDb()
-  const lines = await db.getAll('lines')
-  const map = new Map<string, LineItem[]>()
-  for (const line of lines) {
-    const arr = map.get(line.monthId) ?? []
-    arr.push(line)
-    map.set(line.monthId, arr)
-  }
-  for (const [k, arr] of map) {
-    map.set(
-      k,
-      arr.sort((a, b) => a.createdAt - b.createdAt),
-    )
-  }
-  return map
 }

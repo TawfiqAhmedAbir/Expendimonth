@@ -1,5 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
-import { t } from '../i18n'
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
 
 type ToastState = {
   message: string
@@ -9,20 +8,30 @@ type ToastState = {
 
 type ToastContextValue = {
   showToast: (toast: ToastState) => void
+  /** Convenience: "X removed" with an Undo action. */
+  showUndo: (message: string, undoLabel: string, onUndo: () => void) => void
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null)
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<ToastState | null>(null)
+  const timer = useRef<number | null>(null)
 
   const showToast = useCallback((next: ToastState) => {
+    if (timer.current) window.clearTimeout(timer.current)
     setToast(next)
-    window.setTimeout(() => setToast(null), 5000)
+    timer.current = window.setTimeout(() => setToast(null), 6000)
   }, [])
 
+  const showUndo = useCallback(
+    (message: string, undoLabel: string, onUndo: () => void) =>
+      showToast({ message, actionLabel: undoLabel, onAction: onUndo }),
+    [showToast],
+  )
+
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={{ showToast, showUndo }}>
       {children}
       {toast ? (
         <div className="toast" role="status">
@@ -30,6 +39,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           {toast.actionLabel && toast.onAction ? (
             <button
               type="button"
+              className="toast__action"
               onClick={() => {
                 toast.onAction?.()
                 setToast(null)
@@ -48,12 +58,4 @@ export function useToast(): ToastContextValue {
   const ctx = useContext(ToastContext)
   if (!ctx) throw new Error('useToast outside provider')
   return ctx
-}
-
-export function toastDeleted(onUndo: () => void, locale: string): ToastState {
-  return {
-    message: t('line.deleted', locale),
-    actionLabel: t('line.undo', locale),
-    onAction: onUndo,
-  }
 }
