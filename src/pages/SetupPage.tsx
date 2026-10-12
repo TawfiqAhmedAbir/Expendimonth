@@ -7,6 +7,7 @@ import { ScreenShell } from '../design-kit/ScreenShell'
 import { useAppData } from '../storage/AppDataContext'
 
 const CURRENCIES = [
+  { code: 'BDT', label: 'Bangladeshi taka (BDT)' },
   { code: 'EUR', label: 'Euro (EUR)' },
   { code: 'MAD', label: 'Moroccan dirham (MAD)' },
   { code: 'USD', label: 'US dollar (USD)' },
