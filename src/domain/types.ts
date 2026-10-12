@@ -2,11 +2,23 @@ export type LineType = 'in' | 'out'
 
 export type MonthStatus = 'empty' | 'open' | 'done'
 
+export type PropertyType = 'house' | 'land' | 'vehicle' | 'business' | 'other'
+
 export type Settings = {
-  houseName: string
+  userName: string
+  propertyName: string
+  propertyType: PropertyType
+  propertyTypeCustom: string
   currencyCode: string
   openingBalanceCents: number
   locale: string
+}
+
+export type UserCategory = {
+  id: string
+  label: string
+  createdAt: number
+  lastUsedAt: number
 }
 
 export type MonthRecord = {
@@ -35,9 +47,10 @@ export type AttachmentRecord = {
 }
 
 export type BackupPayload = {
-  version: 1
+  version: 2
   exportedAt: string
   settings: Settings
+  categories: UserCategory[]
   months: MonthRecord[]
   lines: LineItem[]
   attachments: { monthId: string; mimeType: string; base64: string }[]

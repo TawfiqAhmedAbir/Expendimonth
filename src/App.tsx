@@ -6,6 +6,7 @@ import { HomePage } from './pages/HomePage'
 import { MonthPage } from './pages/MonthPage'
 import { MonthsPage } from './pages/MonthsPage'
 import { MorePage } from './pages/MorePage'
+import { CategoriesPage } from './pages/CategoriesPage'
 import { SetupPage } from './pages/SetupPage'
 
 function AppRoutes() {
@@ -26,6 +27,10 @@ function AppRoutes() {
       />
       <Route path="/months" element={setupDone ? <MonthsPage /> : <Navigate to="/setup" replace />} />
       <Route path="/more" element={setupDone ? <MorePage /> : <Navigate to="/setup" replace />} />
+      <Route
+        path="/categories"
+        element={setupDone ? <CategoriesPage /> : <Navigate to="/setup" replace />}
+      />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

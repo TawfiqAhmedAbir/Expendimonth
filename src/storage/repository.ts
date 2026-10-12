@@ -6,22 +6,38 @@ import type {
   Settings,
 } from '../domain/types'
 import { deriveMonthStatus } from '../domain/calc'
+import { listCategories } from './categories'
 import { getDb } from './db'
 
 const SETTINGS_KEY = 'expendimonth-settings'
 
 const defaultSettings = (): Settings => ({
-  houseName: '',
+  userName: '',
+  propertyName: '',
+  propertyType: 'house',
+  propertyTypeCustom: '',
   currencyCode: '',
   openingBalanceCents: 0,
   locale: 'en',
 })
 
+type LegacySettings = Settings & { houseName?: string }
+
 export function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (!raw) return defaultSettings()
-    return { ...defaultSettings(), ...JSON.parse(raw) } as Settings
+    const parsed = JSON.parse(raw) as LegacySettings
+    const base = defaultSettings()
+    const propertyName = parsed.propertyName?.trim() || parsed.houseName?.trim() || ''
+    return {
+      ...base,
+      ...parsed,
+      propertyName,
+      userName: parsed.userName?.trim() ?? '',
+      propertyType: parsed.propertyType ?? 'house',
+      propertyTypeCustom: parsed.propertyTypeCustom?.trim() ?? '',
+    }
   } catch {
     return defaultSettings()
   }
@@ -33,7 +49,9 @@ export function saveSettings(settings: Settings): void {
 
 export function isSetupComplete(): boolean {
   const s = loadSettings()
-  return Boolean(s.currencyCode && s.houseName.trim())
+  if (!s.currencyCode || !s.userName.trim() || !s.propertyName.trim()) return false
+  if (s.propertyType === 'other' && !s.propertyTypeCustom.trim()) return false
+  return true
 }
 
 function monthIdFor(yearMonth: string): string {
@@ -204,10 +222,12 @@ export async function buildBackup(): Promise<BackupPayload> {
       }
     }),
   )
+  const categories = await listCategories()
   return {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     settings: loadSettings(),
+    categories,
     months,
     lines,
     attachments,

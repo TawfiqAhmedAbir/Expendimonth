@@ -1,10 +1,11 @@
 import { formatMoney } from '../domain/calc'
-import { getCategoryLabelKey } from '../domain/categories'
-import type { LineItem } from '../domain/types'
+import { getCategoryLabel } from '../domain/categories'
+import type { LineItem, UserCategory } from '../domain/types'
 import { t } from '../i18n'
 
 type Props = {
   line: LineItem
+  categories: UserCategory[]
   currencyCode: string
   locale: string
   onEdit: () => void
@@ -12,11 +13,11 @@ type Props = {
   readOnly?: boolean
 }
 
-export function LineItemRow({ line, currencyCode, locale, onEdit, onDelete, readOnly }: Props) {
+export function LineItemRow({ line, categories, currencyCode, locale, onEdit, onDelete, readOnly }: Props) {
   return (
     <div className="line-row">
       <div className="line-row__meta">
-        <div className="line-row__cat">{t(getCategoryLabelKey(line.categoryId), locale)}</div>
+        <div className="line-row__cat">{getCategoryLabel(line.categoryId, categories)}</div>
         {line.note ? <div className="line-row__note">{line.note}</div> : null}
       </div>
       <div

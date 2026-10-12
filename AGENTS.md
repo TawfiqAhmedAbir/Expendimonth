@@ -23,8 +23,11 @@ Mobile-first PWA for one house: monthly **money in**, **money out**, and **what'
 ## Decisions already made
 
 - English UI; i18n keys ready (`src/i18n/`), French stub empty
+- Onboarding: user name → property name → type (house/land/vehicle/business/other+custom) → currency
+- Home is property dashboard; month ledger at `/month/:yearMonth`
+- User-created categories (IndexedDB `categories`); no preset rent/electricity chips
 - Currency chosen on first launch (not hardcoded)
-- IndexedDB for months/lines/photos; settings in localStorage
+- IndexedDB for months/lines/photos/categories; settings in localStorage
 - Running balance supported in domain calc; UI emphasizes monthly net
 - Colour theme: warm off-white canvas, sage green in, coral out, teal accent
 

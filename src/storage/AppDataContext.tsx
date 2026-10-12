@@ -7,11 +7,11 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { LineItem, MonthRecord, Settings } from '../domain/types'
+import type { LineItem, MonthRecord, Settings, UserCategory } from '../domain/types'
+import { listCategories } from './categories'
 import {
   buildBackup,
   getAllLinesGrouped,
-  isSetupComplete,
   listMonths,
   loadSettings,
   saveSettings,
@@ -20,6 +20,7 @@ import {
 type AppDataContextValue = {
   ready: boolean
   settings: Settings
+  categories: UserCategory[]
   months: MonthRecord[]
   linesByMonthId: Map<string, LineItem[]>
   refresh: () => Promise<void>
@@ -32,13 +33,19 @@ const AppDataContext = createContext<AppDataContextValue | null>(null)
 export function AppDataProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [settings, setSettings] = useState<Settings>(() => loadSettings())
+  const [categories, setCategories] = useState<UserCategory[]>([])
   const [months, setMonths] = useState<MonthRecord[]>([])
   const [linesByMonthId, setLinesByMonthId] = useState<Map<string, LineItem[]>>(new Map())
 
   const refresh = useCallback(async () => {
-    const [m, lines] = await Promise.all([listMonths(), getAllLinesGrouped()])
+    const [m, lines, cats] = await Promise.all([
+      listMonths(),
+      getAllLinesGrouped(),
+      listCategories(),
+    ])
     setMonths(m)
     setLinesByMonthId(lines)
+    setCategories(cats)
     setSettings(loadSettings())
     setReady(true)
   }, [])
@@ -47,13 +54,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     void refresh()
   }, [refresh])
 
-  const updateSettings = useCallback(
-    (s: Settings) => {
-      saveSettings(s)
-      setSettings(s)
-    },
-    [],
-  )
+  const updateSettings = useCallback((s: Settings) => {
+    saveSettings(s)
+    setSettings(s)
+  }, [])
 
   const exportBackup = useCallback(async () => {
     const payload = await buildBackup()
@@ -70,13 +74,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     () => ({
       ready,
       settings,
+      categories,
       months,
       linesByMonthId,
       refresh,
       updateSettings,
       exportBackup,
     }),
-    [ready, settings, months, linesByMonthId, refresh, updateSettings, exportBackup],
+    [ready, settings, categories, months, linesByMonthId, refresh, updateSettings, exportBackup],
   )
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>
@@ -86,8 +91,4 @@ export function useAppData(): AppDataContextValue {
   const ctx = useContext(AppDataContext)
   if (!ctx) throw new Error('useAppData outside provider')
   return ctx
-}
-
-export function useSetupGate(): boolean {
-  return isSetupComplete()
 }

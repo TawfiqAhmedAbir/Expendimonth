@@ -11,6 +11,7 @@ import {
 } from '../domain/calc'
 import type { LineItem, LineType, MonthRecord } from '../domain/types'
 import { t } from '../i18n'
+import { createCategory, touchCategory } from '../storage/categories'
 import {
   addLine,
   copyLinesFromMonth,
@@ -34,11 +35,10 @@ import { ReconcileBanner } from './ReconcileBanner'
 
 type Props = {
   yearMonth: string
-  preview?: boolean
 }
 
-export function MonthView({ yearMonth, preview }: Props) {
-  const { settings, refresh, months, linesByMonthId } = useAppData()
+export function MonthView({ yearMonth }: Props) {
+  const { settings, refresh, months, linesByMonthId, categories } = useAppData()
   const { showToast } = useToast()
   const locale = settings.locale
   const currency = settings.currencyCode
@@ -69,7 +69,7 @@ export function MonthView({ yearMonth, preview }: Props) {
 
   const prevYm = previousYearMonth(yearMonth)
   const insight = useMemo(() => {
-    if (!prevYm || !month) return null
+    if (!prevYm || !month || lines.length === 0) return null
     const prevMonth = months.find((m) => m.yearMonth === prevYm)
     if (!prevMonth) return null
     const prevLines = linesByMonthId.get(prevMonth.id) ?? []
@@ -81,6 +81,7 @@ export function MonthView({ yearMonth, preview }: Props) {
   if (!month) return null
 
   const readOnly = month.status === 'done'
+  const isEmpty = lines.length === 0
 
   const chartThisMonth = [
     {
@@ -90,18 +91,32 @@ export function MonthView({ yearMonth, preview }: Props) {
     },
   ]
 
-  const displayLines = preview ? lines.slice(0, 5) : lines
-
   async function handleSave(data: {
     type: LineType
     amountCents: number
-    categoryId: string
+    categoryId?: string
+    newCategoryLabel?: string
     note: string
   }) {
+    let categoryId = data.categoryId ?? sheet?.edit?.categoryId
+    if (data.newCategoryLabel?.trim()) {
+      const cat = await createCategory(data.newCategoryLabel.trim())
+      categoryId = cat.id
+    } else if (categoryId) {
+      await touchCategory(categoryId)
+    }
+    if (!categoryId) return
+
+    const payload = {
+      type: data.type,
+      amountCents: data.amountCents,
+      categoryId,
+      note: data.note,
+    }
     if (sheet?.edit) {
-      await updateLine({ ...sheet.edit, ...data })
+      await updateLine({ ...sheet.edit, ...payload })
     } else {
-      await addLine(month!.id, data)
+      await addLine(month!.id, payload)
     }
     await refresh()
     await load()
@@ -139,39 +154,94 @@ export function MonthView({ yearMonth, preview }: Props) {
 
   return (
     <>
+      <Link to="/" className="btn btn--ghost" style={{ marginBottom: 'var(--space-md)' }}>
+        ← {settings.propertyName}
+      </Link>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h1 className="page-title">{formatYearMonthLabel(yearMonth, locale)}</h1>
-          <p className="page-sub">{settings.houseName}</p>
+          <p className="page-sub">{t('month.sub', locale)}</p>
         </div>
         <span className={`badge ${badgeCls}`}>{t(statusKey, locale)}</span>
       </div>
 
-      <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
-        <HeroTotals lines={lines} currencyCode={currency} locale={locale} />
-      </div>
+      {isEmpty ? (
+        <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
+          <p style={{ margin: 0, color: 'var(--color-muted)' }}>{t('month.emptyPrompt', locale)}</p>
+        </div>
+      ) : (
+        <>
+          <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
+            <HeroTotals lines={lines} currencyCode={currency} locale={locale} />
+          </div>
+          {insight ? (
+            <div className={`insight ${insight.better ? 'insight--positive' : 'insight--negative'}`}>
+              {t('home.vsLast', locale, {
+                amount: formatMoney(Math.abs(insight.deltaCents), currency, locale),
+                direction: insight.better ? t('home.better', locale) : t('home.worse', locale),
+              })}
+            </div>
+          ) : null}
+          <div className="card">
+            <MoneyBarChart data={chartThisMonth} currencyCode={currency} locale={locale} />
+          </div>
+        </>
+      )}
 
-      {insight && preview ? (
-        <div className={`insight ${insight.better ? 'insight--positive' : 'insight--negative'}`}>
-          {t('home.vsLast', locale, {
-            amount: formatMoney(Math.abs(insight.deltaCents), currency, locale),
-            direction: insight.better ? t('home.better', locale) : t('home.worse', locale),
-          })}
+      {!readOnly ? (
+        <div className="btn-row" style={{ margin: 'var(--space-lg) 0' }}>
+          <button type="button" className="btn btn--in" style={{ flex: 1 }} onClick={() => setSheet({ type: 'in' })}>
+            {t('home.addIn', locale)}
+          </button>
+          <button type="button" className="btn btn--out" style={{ flex: 1 }} onClick={() => setSheet({ type: 'out' })}>
+            {t('home.addOut', locale)}
+          </button>
         </div>
       ) : null}
 
-      <div className="card">
-        <MoneyBarChart data={chartThisMonth} currencyCode={currency} locale={locale} />
-      </div>
+      {!isEmpty ? (
+        <div className="card">
+          {lines.map((line) => (
+            <LineItemRow
+              key={line.id}
+              line={line}
+              categories={categories}
+              currencyCode={currency}
+              locale={locale}
+              readOnly={readOnly}
+              onEdit={() => setSheet({ type: line.type, edit: line })}
+              onDelete={() => void handleDelete(line)}
+            />
+          ))}
+          <div className="list-footer-totals">
+            <div>
+              {t('running.totalIn', locale)}: {formatMoney(totalIn(lines), currency, locale)}
+            </div>
+            <div>
+              {t('running.totalOut', locale)}: {formatMoney(totalOut(lines), currency, locale)}
+            </div>
+            <div>
+              <strong>
+                {t('running.net', locale)}: {formatMoney(net(lines), currency, locale)}
+              </strong>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
-      {!preview ? (
+      {!readOnly && !isEmpty && prevYm ? (
+        <button
+          type="button"
+          className="btn btn--ghost btn--block"
+          style={{ marginTop: 'var(--space-md)' }}
+          onClick={() => void handleCopyLast()}
+        >
+          {t('month.copyLast', locale)}
+        </button>
+      ) : null}
+
+      {!isEmpty ? (
         <>
-          {!readOnly && prevYm ? (
-            <button type="button" className="btn btn--ghost btn--block" style={{ marginBottom: 'var(--space-md)' }} onClick={() => void handleCopyLast()}>
-              {t('month.copyLast', locale)}
-            </button>
-          ) : null}
-
           <ReconcileBanner
             month={month}
             lines={lines}
@@ -215,55 +285,7 @@ export function MonthView({ yearMonth, preview }: Props) {
         </>
       ) : null}
 
-      {!readOnly ? (
-        <div className="btn-row" style={{ margin: 'var(--space-lg) 0' }}>
-          <button type="button" className="btn btn--in" style={{ flex: 1 }} onClick={() => setSheet({ type: 'in' })}>
-            {t('home.addIn', locale)}
-          </button>
-          <button type="button" className="btn btn--out" style={{ flex: 1 }} onClick={() => setSheet({ type: 'out' })}>
-            {t('home.addOut', locale)}
-          </button>
-        </div>
-      ) : null}
-
-      <div className="card">
-        {displayLines.length === 0 ? (
-          <p style={{ color: 'var(--color-muted)', margin: 0 }}>{t('status.empty', locale)}</p>
-        ) : (
-          displayLines.map((line) => (
-            <LineItemRow
-              key={line.id}
-              line={line}
-              currencyCode={currency}
-              locale={locale}
-              readOnly={readOnly}
-              onEdit={() => setSheet({ type: line.type, edit: line })}
-              onDelete={() => void handleDelete(line)}
-            />
-          ))
-        )}
-        <div className="list-footer-totals">
-          <div>
-            {t('running.totalIn', locale)}: {formatMoney(totalIn(lines), currency, locale)}
-          </div>
-          <div>
-            {t('running.totalOut', locale)}: {formatMoney(totalOut(lines), currency, locale)}
-          </div>
-          <div>
-            <strong>
-              {t('running.net', locale)}: {formatMoney(net(lines), currency, locale)}
-            </strong>
-          </div>
-        </div>
-      </div>
-
-      {preview && lines.length > 5 ? (
-        <Link to={`/month/${yearMonth}`} className="btn btn--primary btn--block" style={{ marginTop: 'var(--space-md)' }}>
-          {t('home.seeAll', locale)}
-        </Link>
-      ) : null}
-
-      {!preview && !readOnly ? (
+      {!readOnly && !isEmpty ? (
         <button
           type="button"
           className="btn btn--primary btn--block"
@@ -274,7 +296,7 @@ export function MonthView({ yearMonth, preview }: Props) {
         </button>
       ) : null}
 
-      {!preview && readOnly ? (
+      {readOnly ? (
         <button
           type="button"
           className="btn btn--ghost btn--block"
@@ -293,6 +315,7 @@ export function MonthView({ yearMonth, preview }: Props) {
         open={Boolean(sheet)}
         type={sheet?.type ?? 'in'}
         locale={locale}
+        categories={categories}
         initial={sheet?.edit ?? null}
         onClose={() => setSheet(null)}
         onSave={(data) => void handleSave(data)}
