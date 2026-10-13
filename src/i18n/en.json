@@ -89,10 +89,6 @@
   "month.markDone": "Close month",
   "month.reopen": "Reopen month",
   "month.moreOptions": "More options",
-  "month.photo": "Month photo",
-  "month.attachPhoto": "Attach photo",
-  "month.replacePhoto": "Replace photo",
-  "month.compare": "Compare with photo",
   "month.lockedHint": "This month is closed. Reopen to make changes.",
   "month.addIn": "Money in",
   "month.addOut": "Money out",
@@ -119,9 +115,6 @@
   "reconcile.offOut": "Money out is off by {amount}",
   "reconcile.unset": "No paper totals entered yet",
 
-  "compare.title": "Compare with photo",
-  "compare.noPhoto": "Attach the month photo first, then compare it with your totals here.",
-  "compare.appSays": "App says",
   "compare.paperSays": "Paper says",
 
   "line.edit": "Edit",

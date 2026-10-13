@@ -1,5 +1,5 @@
 import { ArrowLeft, Printer } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { getCategoryLabel } from '../domain/categories'
 import { formatMoney, formatYearMonthLabel, monthlySeries, net, totalIn, totalOut, yearMonthsBack, yearSummary } from '../domain/calc'
@@ -8,7 +8,6 @@ import { Button, LinkButton } from '../design-kit/Primitives'
 import { ScreenShell } from '../design-kit/ScreenShell'
 import { t } from '../i18n'
 import { useActiveProperty, useAppData } from '../storage/AppDataContext'
-import { getAttachment } from '../storage/repository'
 
 export function ReportPage() {
   const { scope = 'month', id = '' } = useParams()
@@ -16,17 +15,9 @@ export function ReportPage() {
   const { settings, monthsByYearMonth, linesByMonthId, categories } = useAppData()
   const locale = settings.locale
   const currency = property.currencyCode
-  const [photo, setPhoto] = useState<string | null>(null)
 
   const month = scope === 'month' ? monthsByYearMonth.get(id) : undefined
   const lines = month ? (linesByMonthId.get(month.id) ?? []) : []
-
-  useEffect(() => {
-    if (!month) return
-    let u: string | null = null
-    void getAttachment(month.id).then((a) => { u = a ? URL.createObjectURL(a.blob) : null; setPhoto(u) })
-    return () => { if (u) URL.revokeObjectURL(u) }
-  }, [month])
 
   const series = useMemo(() => (scope === 'year' ? monthlySeries(yearMonthsBack(`${id}-12`, 12), monthsByYearMonth, linesByMonthId) : []), [scope, id, monthsByYearMonth, linesByMonthId])
   const ys = useMemo(() => (scope === 'year' ? yearSummary(id, series) : null), [scope, id, series])
@@ -76,7 +67,6 @@ export function ReportPage() {
               ))}
             </tbody>
           </table>
-          {photo ? <img src={photo} alt="" style={{ width: '100%', maxHeight: '40vh', objectFit: 'contain', marginTop: 'var(--s-5)', borderRadius: 8 }} /> : null}
         </>
       ) : null}
 

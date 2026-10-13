@@ -9,7 +9,6 @@ import { LockPage } from './pages/LockPage'
 import { MonthPage } from './pages/MonthPage'
 import { MonthsPage } from './pages/MonthsPage'
 import { MorePage } from './pages/MorePage'
-import { PhotoComparePage } from './pages/PhotoComparePage'
 import { NewPropertyPage, PropertiesPage } from './pages/PropertiesPage'
 import { ReportPage } from './pages/ReportPage'
 import { SetupPage } from './pages/SetupPage'
@@ -50,7 +49,6 @@ function AppRoutes() {
       <Route path="/setup" element={setupDone ? <Navigate to="/" replace /> : <SetupPage />} />
       <Route path="/" element={guard(<HomePage />)} />
       <Route path="/month/:yearMonth" element={guard(<MonthPage />)} />
-      <Route path="/month/:yearMonth/compare" element={guard(<PhotoComparePage />)} />
       <Route path="/months" element={guard(<MonthsPage />)} />
       <Route path="/year/:year" element={guard(<YearSummaryPage />)} />
       <Route path="/insights" element={guard(<InsightsPage />)} />

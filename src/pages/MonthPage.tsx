@@ -1,6 +1,6 @@
-import { ArrowLeft, Camera, Images, ListChecks, Lock, LockOpen, Minus, Plus, Printer } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { ArrowLeft, ListChecks, Lock, LockOpen, Minus, Plus, Printer } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { AmountPadSheet, type AmountPadResult } from '../components/AmountPadSheet'
 import { CloseMonthFlow } from '../components/CloseMonthFlow'
 import { HeroTotals } from '../components/HeroTotals'
@@ -20,7 +20,6 @@ import {
 } from '../domain/calc'
 import type { LineItem, LineType, UserCategory } from '../domain/types'
 import { Badge, Button, Card, LinkButton, Sheet } from '../design-kit/Primitives'
-import { haptic } from '../design-kit/motion'
 import { ScreenShell } from '../design-kit/ScreenShell'
 import { t } from '../i18n'
 import { useActiveProperty, useAppData } from '../storage/AppDataContext'
@@ -29,10 +28,8 @@ import {
   addLine,
   addLines,
   deleteLine,
-  getAttachment,
   getOrCreateMonth,
   restoreLine,
-  saveAttachment,
   setMonthReconcile,
   setMonthStatus,
   updateLine,
@@ -54,26 +51,10 @@ export function MonthPage() {
   const [closing, setClosing] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const [editCat, setEditCat] = useState<UserCategory | null>(null)
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (!month && yearMonth) void getOrCreateMonth(property.id, yearMonth).then(() => refresh())
   }, [month, yearMonth, property.id, refresh])
-
-  const loadPhoto = useCallback(async () => {
-    if (!month) return
-    const att = await getAttachment(month.id)
-    setPhotoUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev)
-      return att ? URL.createObjectURL(att.blob) : null
-    })
-  }, [month])
-
-  useEffect(() => {
-    void loadPhoto()
-  }, [loadPhoto])
-
-  useEffect(() => () => { if (photoUrl) URL.revokeObjectURL(photoUrl) }, [photoUrl])
 
   const prevYm = previousYearMonth(yearMonth)
   const prevMonth = prevYm ? monthsByYearMonth.get(prevYm) : undefined
@@ -103,12 +84,6 @@ export function MonthPage() {
     if (month!.status === 'checked') await setMonthStatus(month!.id, 'open')
     await refresh()
     if (removed) showUndo(t('line.deleted', locale), t('common.undo', locale), async () => { await restoreLine(removed); await refresh() })
-  }
-
-  async function onPhoto(file: File) {
-    await saveAttachment(month!.id, file)
-    haptic(12)
-    await loadPhoto()
   }
 
   return (
@@ -172,24 +147,6 @@ export function MonthPage() {
           </div>
         </Card>
       ) : null}
-
-      <Card variant="flat" style={{ marginTop: 'var(--s-4)' }}>
-        <div className="row row--between">
-          <h2 className="section" style={{ margin: 0 }}>{t('month.photo', locale)}</h2>
-          {photoUrl ? (
-            <Link to={`/month/${yearMonth}/compare`} className="btn btn--ghost btn--sm">
-              <Images size={16} /> {t('month.compare', locale)}
-            </Link>
-          ) : null}
-        </div>
-        {photoUrl ? <Link to={`/month/${yearMonth}/compare`}><img src={photoUrl} alt="" className="photo-thumb" style={{ marginTop: 'var(--s-3)' }} /></Link> : null}
-        {!readOnly ? (
-          <label className="btn btn--ghost btn--block" style={{ marginTop: 'var(--s-3)' }}>
-            <Camera size={18} /> {photoUrl ? t('month.replacePhoto', locale) : t('month.attachPhoto', locale)}
-            <input type="file" accept="image/*" capture="environment" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) void onPhoto(f) }} />
-          </label>
-        ) : null}
-      </Card>
 
       {!readOnly && !isEmpty ? (
         <Button variant="primary" block style={{ marginTop: 'var(--s-5)' }} onClick={() => setClosing(true)}>
@@ -257,9 +214,6 @@ export function MonthPage() {
           ) : null}
           <LinkButton to={`/report/month/${yearMonth}`} block>
             <Printer size={18} /> {t('more.printMonth', locale)}
-          </LinkButton>
-          <LinkButton to={`/month/${yearMonth}/compare`} block>
-            <Images size={18} /> {t('month.compare', locale)}
           </LinkButton>
         </div>
       </Sheet>
