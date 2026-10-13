@@ -65,6 +65,8 @@
 
   "home.greeting": "Hi, {name}",
   "home.thisMonth": "This month",
+  "home.periodInOut": "Money in and out",
+  "home.addingTo": "Adding to {month}",
   "home.noActivity": "Nothing recorded yet",
   "home.lastActivity": "Added {amount} {category} · {when}",
   "home.tileMonth": "This month",
@@ -92,6 +94,8 @@
   "time.daysAgo": "{n} days ago",
 
   "month.sub": "Money in and money out",
+  "month.prev": "Previous month",
+  "month.next": "Next month",
   "month.emptyPrompt": "Tap Money in or Money out. The first time, you name what it is. Next time, pick it from your list.",
   "month.startFromLast": "Start from last month",
   "month.markDone": "Close month",

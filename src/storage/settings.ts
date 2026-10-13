@@ -15,6 +15,7 @@ const defaults = (): Settings => ({
   remindersEnabled: false,
   reminderLastFiredAt: null,
   monthStartSeen: null,
+  workingMonthByProperty: {},
 })
 
 type Stored = Partial<Settings> & { propertyName?: string; houseName?: string; currencyCode?: string }
@@ -24,7 +25,12 @@ export function loadSettings(): Settings {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (!raw) return defaults()
     const parsed = JSON.parse(raw) as Stored
-    const s: Settings = { ...defaults(), ...parsed }
+    const base = defaults()
+    const s: Settings = {
+      ...base,
+      ...parsed,
+      workingMonthByProperty: { ...base.workingMonthByProperty, ...(parsed.workingMonthByProperty ?? {}) },
+    }
     // Legacy single-property install: point at the migrated property.
     if (!s.activePropertyId && parsed.currencyCode && (parsed.propertyName || parsed.houseName)) {
       s.activePropertyId = LEGACY_PROPERTY_ID

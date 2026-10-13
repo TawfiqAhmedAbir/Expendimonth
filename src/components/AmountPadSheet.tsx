@@ -1,6 +1,6 @@
 import { Delete, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { centsToInput, clampDateToMonth, defaultOccurredOn, evaluateAmountExpression, formatMoney, monthDateBounds } from '../domain/calc'
+import { centsToInput, clampDateToMonth, defaultOccurredOn, evaluateAmountExpression, formatMoney, formatYearMonthLabel, monthDateBounds } from '../domain/calc'
 import type { LineItem, UserCategory } from '../domain/types'
 import { Button, Chip, Sheet } from '../design-kit/Primitives'
 import { haptic } from '../design-kit/motion'
@@ -118,6 +118,9 @@ export function AmountPadSheet({ open, type, currencyCode, locale, categories, y
 
   return (
     <Sheet open={open} onClose={onClose} title={title}>
+      <p className="caption" style={{ margin: 'calc(var(--s-2) * -1) 0 var(--s-4)' }}>
+        {formatYearMonthLabel(activeYm, locale)}
+      </p>
       <div className="pad__display">
         <div className="pad__expr">{hasChain ? expr.replaceAll('+', ' + ') : t('pad.chainHint', locale)}</div>
         <div className={`pad__value money money--${type}`}>

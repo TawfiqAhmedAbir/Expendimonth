@@ -17,6 +17,7 @@ import {
   mostOverdueStanding,
   net,
   occurredOnFromCreatedAt,
+  nextYearMonth,
   previousYearMonth,
   reconcileMismatch,
   runwayMonths,
@@ -25,6 +26,7 @@ import {
   totalIn,
   totalOut,
   yearMonthsBack,
+  yearMonthsWindow,
   yearSummary,
 } from './calc'
 import type { LineItem, MonthRecord, UserCategory } from './types'
@@ -89,11 +91,17 @@ describe('dates', () => {
   it('previous and same-month-last-year', () => {
     expect(previousYearMonth('2026-03')).toBe('2026-02')
     expect(previousYearMonth('2026-01')).toBe('2025-12')
+    expect(nextYearMonth('2026-03')).toBe('2026-04')
+    expect(nextYearMonth('2026-12')).toBe('2027-01')
     expect(sameMonthLastYear('2026-03')).toBe('2025-03')
   })
 
   it('yearMonthsBack returns ascending list ending at from', () => {
     expect(yearMonthsBack('2026-02', 3)).toEqual(['2025-12', '2026-01', '2026-02'])
+  })
+
+  it('yearMonthsWindow spans back and forward from center', () => {
+    expect(yearMonthsWindow('2026-02', 2, 1)).toEqual(['2025-12', '2026-01', '2026-02', '2026-03'])
   })
 
   it('clamps a day into the target month', () => {

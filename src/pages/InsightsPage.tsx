@@ -15,15 +15,18 @@ import {
   previousYearMonth,
   sameMonthLastYear,
   yearMonthsBack,
+  yearMonthsWindow,
   yearOf,
   yearSummary,
   type CategoryChange,
 } from '../domain/calc'
 import { Card, Chip, LinkButton } from '../design-kit/Primitives'
 import { haptic } from '../design-kit/motion'
+import { useWorkingYearMonth } from '../hooks/useWorkingYearMonth'
 import { ScreenShell } from '../design-kit/ScreenShell'
 import { t } from '../i18n'
 import { useActiveProperty, useAppData } from '../storage/AppDataContext'
+import { getWorkingYearMonthFromSettings } from '../storage/workingMonth'
 
 function categoryTone(change: CategoryChange): string {
   const up = change.deltaCents > 0
@@ -38,11 +41,13 @@ export function InsightsPage() {
   const currency = property.currencyCode
   const navigate = useNavigate()
   const current = currentYearMonth()
-  const [selected, setSelected] = useState(current)
+  const workingYm = getWorkingYearMonthFromSettings(settings, property.id)
+  const [, setWorkingYm] = useWorkingYearMonth(property.id)
+  const [selected, setSelected] = useState(workingYm)
   const [donutType, setDonutType] = useState<'out' | 'in'>('out')
 
-  const last12 = useMemo(() => yearMonthsBack(current, 12), [current])
-  const series = useMemo(() => monthlySeries(last12, monthsByYearMonth, linesByMonthId), [last12, monthsByYearMonth, linesByMonthId])
+  const chartMonths = useMemo(() => yearMonthsWindow(current, 11, 2), [current])
+  const series = useMemo(() => monthlySeries(chartMonths, monthsByYearMonth, linesByMonthId), [chartMonths, monthsByYearMonth, linesByMonthId])
   const hasData = series.some((p) => p.inCents || p.outCents)
 
   const selMonth = monthsByYearMonth.get(selected)
@@ -81,6 +86,7 @@ export function InsightsPage() {
   function pickMonth(ym: string) {
     haptic(6)
     setSelected(ym)
+    setWorkingYm(ym)
   }
 
   return (

@@ -162,6 +162,10 @@ export function previousYearMonth(yearMonth: string): string | null {
   return shiftYearMonth(yearMonth, -1)
 }
 
+export function nextYearMonth(yearMonth: string): string | null {
+  return shiftYearMonth(yearMonth, 1)
+}
+
 export function sameMonthLastYear(yearMonth: string): string | null {
   return shiftYearMonth(yearMonth, -12)
 }
@@ -170,6 +174,21 @@ export function yearMonthsBack(from: string, count: number): string[] {
   const out: string[] = []
   for (let i = count - 1; i >= 0; i--) {
     const ym = shiftYearMonth(from, -i)
+    if (ym) out.push(ym)
+  }
+  return out
+}
+
+/** Ascending year-months from `back` months before center through `forward` months after. */
+export function yearMonthsWindow(centerYm: string, back: number, forward: number): string[] {
+  const out: string[] = []
+  for (let i = back; i >= 1; i--) {
+    const ym = shiftYearMonth(centerYm, -i)
+    if (ym) out.push(ym)
+  }
+  out.push(centerYm)
+  for (let i = 1; i <= forward; i++) {
+    const ym = shiftYearMonth(centerYm, i)
     if (ym) out.push(ym)
   }
   return out

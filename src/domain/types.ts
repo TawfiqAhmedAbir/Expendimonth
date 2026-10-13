@@ -32,6 +32,8 @@ export type Settings = {
   reminderLastFiredAt: number | null
   /** `${propertyId}:${yearMonth}` once the start-month sheet was dismissed or confirmed. */
   monthStartSeen: string | null
+  /** Per-property dashboard / working month (YYYY-MM). Falls back to calendar month when unset. */
+  workingMonthByProperty: Record<string, string>
 }
 
 export type UserCategory = {

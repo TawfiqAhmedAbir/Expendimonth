@@ -17,6 +17,7 @@ import {
   totalIn,
   totalOut,
   yearMonthsBack,
+  yearMonthsWindow,
   yearOf,
 } from '../domain/calc'
 import type { LineItem, MonthRecord, UserCategory } from '../domain/types'
@@ -49,12 +50,13 @@ export function MonthsPage() {
   const current = currentYearMonth()
   const streak = closedMonthStreak(months, property.id, current)
   const last12 = useMemo(() => yearMonthsBack(current, 12), [current])
+  const seedRange = useMemo(() => yearMonthsWindow(current, 12, 3), [current])
 
   useEffect(() => {
-    const missing = last12.filter((ym) => !monthsByYearMonth.has(ym))
+    const missing = seedRange.filter((ym) => !monthsByYearMonth.has(ym))
     if (missing.length === 0) return
     void Promise.all(missing.map((ym) => getOrCreateMonth(property.id, ym))).then(() => refresh())
-  }, [last12, monthsByYearMonth, property.id, refresh])
+  }, [seedRange, monthsByYearMonth, property.id, refresh])
 
   const q = query.trim().toLowerCase()
   const matchesQuery = (lines: LineItem[]) => !q || lines.some((l) => lineMatches(l, q, categories))

@@ -1,12 +1,13 @@
 import { ArrowLeft, ListChecks, Lock, LockOpen, Minus, Plus, Printer, Share2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AmountKeypadSheet } from '../components/AmountKeypad'
 import { AmountPadSheet, type AmountPadResult } from '../components/AmountPadSheet'
 import { CloseMonthFlow } from '../components/CloseMonthFlow'
 import { MoneyFlowBar } from '../components/MoneyFlowBar'
 import { LastMonthChecklist } from '../components/LastMonthChecklist'
 import { LineItemRow } from '../components/LineItemRow'
+import { MonthStepper } from '../components/MonthStepper'
 import { MonthCalendarStrip } from '../components/MonthCalendarStrip'
 import { MonthStartSheet } from '../components/MonthStartSheet'
 import { StandingItemsRow, standingLinePayload } from '../components/StandingItemsRow'
@@ -35,6 +36,7 @@ import { Badge, Button, Card, Chip, LinkButton, ProgressBar, Sheet } from '../de
 import { ScreenShell } from '../design-kit/ScreenShell'
 import { useMonthLineActions } from '../hooks/useMonthLineActions'
 import { useMonthStart } from '../hooks/useMonthStart'
+import { useWorkingYearMonth } from '../hooks/useWorkingYearMonth'
 import { t } from '../i18n'
 import { useActiveProperty, useAppData } from '../storage/AppDataContext'
 import { touchCategory } from '../storage/categories'
@@ -42,8 +44,10 @@ import { addLine, addLines, addTransfer, getOrCreateMonth, setMonthReconcile, se
 
 export function MonthPage() {
   const { yearMonth = '' } = useParams()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const property = useActiveProperty()
+  const [, setWorkingYm] = useWorkingYearMonth(property.id)
   const { settings, properties, monthsByYearMonth, linesByMonthId, categories, refresh } = useAppData()
   const { showToast } = useToast()
   const { saveLine, removeLine, addPrefilledLine } = useMonthLineActions(property.id, settings.locale)
@@ -71,6 +75,10 @@ export function MonthPage() {
   useEffect(() => {
     if (!month && yearMonth) void getOrCreateMonth(property.id, yearMonth).then(() => refresh())
   }, [month, yearMonth, property.id, refresh])
+
+  useEffect(() => {
+    if (yearMonth) setWorkingYm(yearMonth)
+  }, [yearMonth, setWorkingYm])
 
   useEffect(() => {
     setSelectedDay(filterDay)
@@ -189,7 +197,7 @@ export function MonthPage() {
       <LinkButton to="/" variant="subtle" style={{ marginBottom: 'var(--s-2)', paddingLeft: 0 }}>
         <ArrowLeft size={18} /> {property.name}
       </LinkButton>
-      <div className="row row--between" style={{ marginBottom: 'var(--s-4)' }}>
+      <div className="row row--between" style={{ marginBottom: 'var(--s-2)' }}>
         <div>
           <h1 className="title" style={{ margin: 0 }}>{formatYearMonthLabel(yearMonth, locale)}</h1>
           <p className="caption" style={{ margin: 0 }}>{t('month.sub', locale)}</p>
@@ -199,6 +207,17 @@ export function MonthPage() {
           {mismatch && !readOnly ? t('months.filterMismatch', locale) : t(`status.${shownStatus}`, locale)}
         </Badge>
       </div>
+      <MonthStepper
+        yearMonth={yearMonth}
+        locale={locale}
+        minYearMonth={property.openingAsOf}
+        onChange={(ym) => {
+          navigate(`/month/${ym}`, { replace: true })
+          void getOrCreateMonth(property.id, ym).then(() => refresh())
+        }}
+      />
+
+      <div style={{ marginBottom: 'var(--s-4)' }} />
 
       {readOnly ? (
         <div className="insight" style={{ marginBottom: 'var(--s-4)' }}>

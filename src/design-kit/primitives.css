@@ -1055,6 +1055,26 @@ button.line__main:active {
   text-align: center;
 }
 
+.month-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  margin: var(--s-3) 0;
+}
+
+.month-stepper--compact {
+  margin: var(--s-2) 0;
+}
+
+.month-stepper__label {
+  min-width: 5rem;
+  text-align: center;
+  font-weight: var(--weight-medium);
+  font-size: var(--text-caption);
+  color: var(--ink-2);
+}
+
 .flow--compact {
   gap: var(--s-2);
 }

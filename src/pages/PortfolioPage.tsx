@@ -1,13 +1,14 @@
 import { ArrowLeft } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sparkline } from '../components/charts'
-import { currentYearMonth, formatMoney, monthlySeries, net, yearMonthsBack } from '../domain/calc'
+import { formatMoney, monthlySeries, net, yearMonthsBack } from '../domain/calc'
 import type { LineItem, MonthRecord } from '../domain/types'
 import { Card, LinkButton } from '../design-kit/Primitives'
 import { ScreenShell } from '../design-kit/ScreenShell'
 import { t } from '../i18n'
 import { useAppData } from '../storage/AppDataContext'
+import { getWorkingYearMonthFromSettings } from '../storage/workingMonth'
 import { getLinesGrouped, listMonths } from '../storage/repository'
 
 type PropertyRow = {
@@ -24,14 +25,14 @@ export function PortfolioPage() {
   const locale = settings.locale
   const navigate = useNavigate()
   const [rows, setRows] = useState<PropertyRow[]>([])
-  const ym = currentYearMonth()
-  const last6 = useMemo(() => yearMonthsBack(ym, 6), [ym])
 
   useEffect(() => {
     let cancelled = false
     void (async () => {
       const built: PropertyRow[] = []
       for (const p of properties) {
+        const ym = getWorkingYearMonthFromSettings(settings, p.id)
+        const last6 = yearMonthsBack(ym, 6)
         const months: MonthRecord[] = await listMonths(p.id)
         const linesByMonthId: Map<string, LineItem[]> = await getLinesGrouped(p.id)
         const byYm = new Map<string, MonthRecord>()
@@ -53,7 +54,7 @@ export function PortfolioPage() {
     return () => {
       cancelled = true
     }
-  }, [properties, ym, last6])
+  }, [properties, settings])
 
   return (
     <ScreenShell>

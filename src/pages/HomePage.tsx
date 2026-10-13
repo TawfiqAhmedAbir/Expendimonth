@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AmountKeypadSheet } from '../components/AmountKeypad'
 import { AmountPadSheet, type AmountPadResult } from '../components/AmountPadSheet'
 import { MoneyFlowBar } from '../components/MoneyFlowBar'
+import { MonthStepper } from '../components/MonthStepper'
 import { MonthStartSheet } from '../components/MonthStartSheet'
 import { ReminderBanner } from '../components/ReminderBanner'
 import { standingLinePayload } from '../components/StandingItemsRow'
@@ -14,7 +15,6 @@ import {
   cashBalanceThrough,
   closedMonthStreak,
   compareNetToPreviousMonth,
-  currentYearMonth,
   defaultOccurredOn,
   formatMoney,
   formatYearMonthLabel,
@@ -35,6 +35,7 @@ import { useCountUp } from '../design-kit/motion'
 import { ScreenShell } from '../design-kit/ScreenShell'
 import { useMonthLineActions } from '../hooks/useMonthLineActions'
 import { useMonthStart } from '../hooks/useMonthStart'
+import { useWorkingYearMonth } from '../hooks/useWorkingYearMonth'
 import { t } from '../i18n'
 import { touchCategory } from '../storage/categories'
 import { useActiveProperty, useAppData } from '../storage/AppDataContext'
@@ -61,7 +62,7 @@ export function HomePage() {
   const { showToast } = useToast()
   const locale = settings.locale
   const currency = property.currencyCode
-  const ym = currentYearMonth()
+  const [ym, setWorkingYm] = useWorkingYearMonth(property.id)
   const month = monthsByYearMonth.get(ym)
   const [pad, setPad] = useState<'in' | 'out' | null>(null)
   const [counting, setCounting] = useState(false)
@@ -105,6 +106,7 @@ export function HomePage() {
   }, [lines])
 
   const status = visibleStatus(month?.status ?? 'empty')
+  // Balance through the selected working month (not calendar month only).
   const haveNow = cashBalanceThrough([...monthsByYearMonth.values()], linesByMonthId, property.openingBalanceCents, ym, property.openingAsOf ?? null)
   const due = useMemo(() => mostOverdueStanding(categories, lines), [categories, lines])
 
@@ -186,16 +188,15 @@ export function HomePage() {
     setPad(null)
   }
 
+  function stepWorkingMonth(next: string) {
+    setWorkingYm(next)
+    void getOrCreateMonth(property.id, next).then(() => refresh())
+  }
+
   return (
     <ScreenShell showSwitcher>
       <p className="eyebrow">{t('home.greeting', locale, { name: settings.userName })}</p>
-      <div className="row row--between" style={{ marginBottom: 'var(--s-4)' }}>
-        <h1 className="title" style={{ margin: 0 }}>{formatYearMonthLabel(ym, locale)}</h1>
-        <div className="row" style={{ gap: 'var(--s-2)' }}>
-          {streak >= 2 ? <Badge status="done">{t('streak.badge', locale, { n: String(streak) })}</Badge> : null}
-          <Badge status={status}>{t(`status.${status}`, locale)}</Badge>
-        </div>
-      </div>
+      <h1 className="title" style={{ margin: '0 0 var(--s-4)' }}>{property.name}</h1>
 
       {reminder ? (
         <ReminderBanner text={reminder.text} onDismiss={() => setReminderDismissed(true)} />
@@ -216,7 +217,7 @@ export function HomePage() {
             inCents={inC}
             outCents={outC}
             scaleInCents={flowScale}
-            label={t('home.thisMonth', locale)}
+            label={t('home.periodInOut', locale)}
             locale={locale}
             currencyCode={currency}
           />
@@ -281,7 +282,11 @@ export function HomePage() {
             </div>
           </details>
         ) : null}
-        <p className="caption" style={{ margin: 'var(--s-4) 0 0', textAlign: 'center' }}>
+        <div className="row" style={{ gap: 'var(--s-2)', justifyContent: 'center', flexWrap: 'wrap', marginTop: 'var(--s-4)' }}>
+          {streak >= 2 ? <Badge status="done">{t('streak.badge', locale, { n: String(streak) })}</Badge> : null}
+          {!isEmpty || month ? <Badge status={status}>{t(`status.${status}`, locale)}</Badge> : null}
+        </div>
+        <p className="caption" style={{ margin: 'var(--s-3) 0 0', textAlign: 'center' }}>
           {last
             ? t('home.lastActivity', locale, {
                 amount: formatMoney(Math.abs(last.amountCents), currency, locale),
@@ -297,6 +302,20 @@ export function HomePage() {
             : t('home.noActivity', locale)}
         </p>
       </Card>
+
+      <MonthStepper
+        yearMonth={ym}
+        locale={locale}
+        compact
+        minYearMonth={property.openingAsOf}
+        onChange={stepWorkingMonth}
+      />
+
+      {pad !== null ? (
+        <p className="caption" style={{ textAlign: 'center', margin: '0 0 var(--s-2)' }}>
+          {t('home.addingTo', locale, { month: formatYearMonthLabel(ym, locale) })}
+        </p>
+      ) : null}
 
       <div className="row" style={{ marginTop: 'var(--s-4)' }}>
         <Button variant="in" className="grow" onClick={() => tryOpenPad('in')} disabled={month?.status === 'done'}>

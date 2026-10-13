@@ -19,8 +19,8 @@ Mobile-first PWA for a non-technical user (large type, plain language) to track 
 
 ## Current focus
 
-- Weakness fixes and five features are in the working tree: quieter month screen, cash match, start-month sheet, expected-by-day, property transfers, 30-day backup with Share
-- Not deployed yet
+- Dashboard-first Home (property name + flow bar, not month as page title); per-property working month in settings
+- Prev/next month on Home stepper and Month ledger; History seeds 12 back + 3 forward months
 - Next candidates: French strings (`src/i18n/fr.json`), real-device PWA install test
 
 ## Decisions already made
@@ -28,7 +28,7 @@ Mobile-first PWA for a non-technical user (large type, plain language) to track 
 - English UI; i18n keys ready (`src/i18n/`), French stub empty
 - Onboarding: user name → property name → type (house/land/vehicle/business/other+custom) → currency (+ optional opening balance, colour)
 - **Multi-property**: IndexedDB v3 with `properties` store; months keyed `${propertyId}:${yearMonth}`; `PropertySwitcher` in the top bar; v1/v2 data migrates into `prop-legacy`
-- Settings in localStorage `expendimonth-settings`: `userName, locale, activePropertyId, theme, pinHash/pinSalt, lastExportAt, coachDismissed`
+- Settings in localStorage `expendimonth-settings`: `userName, locale, activePropertyId, theme, pinHash/pinSalt, lastExportAt, coachDismissed, workingMonthByProperty`
 - Home = property command centre (StatRing net, in/out, insight vs last month, tiles); month ledger at `/month/:yearMonth`
 - User-created categories per property; no presets. Chips remember last amount; long-press to rename / pick icon
 - Amount entry via keypad sheet with `+` chaining; tap a line to edit, Delete lives inside the edit sheet (with Undo toast)
