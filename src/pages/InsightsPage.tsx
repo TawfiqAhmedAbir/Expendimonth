@@ -5,6 +5,7 @@ import { getCategoryLabel } from '../domain/categories'
 import {
   biggestCategoryChange,
   categoryBreakdown,
+  categorySpend,
   compareNetToPreviousMonth,
   currentYearMonth,
   formatMoney,
@@ -86,7 +87,7 @@ export function InsightsPage() {
         <div className="stack">
           <Card>
             <h2 className="section" style={{ marginTop: 0 }}>{t('insights.inOut', locale)}</h2>
-            <InOutBars series={series} currencyCode={currency} locale={locale} onSelect={setSelected} />
+            <InOutBars series={series} currencyCode={currency} locale={locale} onSelect={(ym) => navigate(`/month/${ym}`)} />
           </Card>
 
           <Card>
@@ -133,14 +134,33 @@ export function InsightsPage() {
               <p className="muted" style={{ margin: 0 }}>{t('insights.noData', locale)}</p>
             ) : (
               <>
-                <Donut slices={breakdown.map((b) => ({ label: getCategoryLabel(b.categoryId, categories), cents: b.cents }))} currencyCode={currency} locale={locale} />
+                <Donut
+                  slices={breakdown.map((b) => ({ id: b.categoryId, label: getCategoryLabel(b.categoryId, categories), cents: b.cents }))}
+                  currencyCode={currency}
+                  locale={locale}
+                  onSelectSlice={(id) => navigate(`/month/${selected}?category=${id}`)}
+                />
                 <div className="stack" style={{ marginTop: 'var(--s-3)' }}>
-                  {breakdown.map((b, i) => (
-                    <div key={b.categoryId} className="row row--between" style={{ marginTop: 'var(--s-2)' }}>
+                  {breakdown.map((b, i) => {
+                    const cat = categories.find((c) => c.id === b.categoryId)
+                    const budget = donutType === 'out' && cat?.budgetCents ? cat.budgetCents : null
+                    const spent = budget ? categorySpend(selLines, b.categoryId, 'out') : 0
+                    return (
+                    <button
+                      key={b.categoryId}
+                      type="button"
+                      className="row row--between"
+                      style={{ marginTop: 'var(--s-2)', width: '100%', border: 'none', background: 'transparent', textAlign: 'left', cursor: 'pointer', padding: 'var(--s-2) 0', font: 'inherit', color: 'inherit' }}
+                      onClick={() => navigate(`/month/${selected}?category=${b.categoryId}`)}
+                    >
                       <span className="row"><span className="topbar__dot" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />{getCategoryLabel(b.categoryId, categories)}</span>
-                      <span className="money">{formatMoney(b.cents, currency, locale)} <span className="caption">{Math.round(b.share * 100)}%</span></span>
-                    </div>
-                  ))}
+                      <span className="money">
+                        {formatMoney(b.cents, currency, locale)} <span className="caption">{Math.round(b.share * 100)}%</span>
+                        {budget ? <span className="caption"> · {t('budget.ofLimit', locale, { pct: String(Math.min(999, Math.round((spent / budget) * 100))) })}</span> : null}
+                      </span>
+                    </button>
+                    )
+                  })}
                 </div>
               </>
             )}

@@ -1,4 +1,4 @@
-import { Building2, ChevronRight, Download, KeyRound, Moon, Printer, ShieldCheck, Sun, Tags, Upload } from 'lucide-react'
+import { Bell, Building2, ChevronRight, Download, KeyRound, Layers, Moon, Printer, ShieldCheck, Sun, Tags, Upload } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PinPad } from '../components/PinPad'
@@ -84,7 +84,32 @@ export function MorePage() {
 
       <Card>
         <RowLink to="/properties" icon={<Building2 size={20} />} label={t('more.properties', locale)} hint={`${properties.length}`} />
+        {properties.length > 1 ? <RowLink to="/portfolio" icon={<Layers size={20} />} label={t('portfolio.title', locale)} /> : null}
         <RowLink to="/categories" icon={<Tags size={20} />} label={t('more.categories', locale)} hint={`${categories.length}`} />
+      </Card>
+
+      <h2 className="section">{t('reminder.settingsTitle', locale)}</h2>
+      <Card>
+        <div className="line">
+          <span className="line__icon"><Bell size={20} /></span>
+          <span className="grow">
+            <span className="line__title" style={{ display: 'block' }}>{t('reminder.enable', locale)}</span>
+            <span className="line__note">{t('reminder.note', locale)}</span>
+          </span>
+          <Button
+            size="sm"
+            variant={settings.remindersEnabled ? 'primary' : 'ghost'}
+            onClick={async () => {
+              const next = !settings.remindersEnabled
+              if (next && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+                await Notification.requestPermission()
+              }
+              updateSettings({ remindersEnabled: next })
+            }}
+          >
+            {settings.remindersEnabled ? 'On' : 'Off'}
+          </Button>
+        </div>
       </Card>
 
       <h2 className="section">{t('more.appearance', locale)}</h2>

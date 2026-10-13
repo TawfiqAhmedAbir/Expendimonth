@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  averageMonthlyOutCents,
   biggestCategoryChange,
   cashBalanceThrough,
   categoryBreakdown,
+  closedMonthStreak,
   clampDateToMonth,
   compareNetToPreviousMonth,
   defaultOccurredOn,
@@ -13,6 +15,7 @@ import {
   occurredOnFromCreatedAt,
   previousYearMonth,
   reconcileMismatch,
+  runwayMonths,
   runningBalanceThrough,
   sameMonthLastYear,
   totalIn,
@@ -172,6 +175,27 @@ describe('series and summaries', () => {
     expect(y.bestMonth?.yearMonth).toBe('2026-01')
     expect(y.worstMonth?.yearMonth).toBe('2026-02')
     expect(y.monthsWithData).toBe(2)
+  })
+
+  it('averageMonthlyOutCents and runwayMonths', () => {
+    const series = [
+      { yearMonth: '2026-01', inCents: 0, outCents: 10_000, netCents: -10_000 },
+      { yearMonth: '2026-02', inCents: 0, outCents: 20_000, netCents: -20_000 },
+      { yearMonth: '2026-03', inCents: 0, outCents: 0, netCents: 0 },
+    ]
+    expect(averageMonthlyOutCents(series)).toBe(15_000)
+    expect(runwayMonths(45_000, 15_000)).toBe(3)
+    expect(runwayMonths(45_000, null)).toBeNull()
+  })
+
+  it('closedMonthStreak counts done months before fromYm', () => {
+    const months: MonthRecord[] = [
+      { id: 'p:2025-11', propertyId: 'p', yearMonth: '2025-11', status: 'done', reconcileInCents: null, reconcileOutCents: null, closedAt: 1 },
+      { id: 'p:2025-12', propertyId: 'p', yearMonth: '2025-12', status: 'done', reconcileInCents: null, reconcileOutCents: null, closedAt: 1 },
+      { id: 'p:2026-01', propertyId: 'p', yearMonth: '2026-01', status: 'open', reconcileInCents: null, reconcileOutCents: null, closedAt: null },
+    ]
+    expect(closedMonthStreak(months, 'p', '2026-01')).toBe(2)
+    expect(closedMonthStreak(months, 'p', '2026-02')).toBe(0)
   })
 
   it('categoryBreakdown shares sum to 1', () => {

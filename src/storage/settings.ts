@@ -12,6 +12,8 @@ const defaults = (): Settings => ({
   pinSalt: null,
   lastExportAt: null,
   coachDismissed: false,
+  remindersEnabled: false,
+  reminderLastFiredAt: null,
 })
 
 type Stored = Partial<Settings> & { propertyName?: string; houseName?: string; currencyCode?: string }

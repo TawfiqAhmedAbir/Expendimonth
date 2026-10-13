@@ -1,4 +1,4 @@
-import { ArrowLeft, Printer } from 'lucide-react'
+import { ArrowLeft, Printer, Share2 } from 'lucide-react'
 import { useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { getCategoryLabel } from '../domain/categories'
@@ -7,12 +7,15 @@ import { propertyTypeLabel } from '../domain/propertyTypes'
 import { Button, LinkButton } from '../design-kit/Primitives'
 import { ScreenShell } from '../design-kit/ScreenShell'
 import { t } from '../i18n'
+import { buildMonthShareText, sharePlainText } from '../domain/shareText'
+import { useToast } from '../components/Toast'
 import { useActiveProperty, useAppData } from '../storage/AppDataContext'
 
 export function ReportPage() {
   const { scope = 'month', id = '' } = useParams()
   const property = useActiveProperty()
   const { settings, monthsByYearMonth, linesByMonthId, categories } = useAppData()
+  const { showToast } = useToast()
   const locale = settings.locale
   const currency = property.currencyCode
 
@@ -29,7 +32,20 @@ export function ReportPage() {
     <ScreenShell hideNav>
       <div className="row row--between no-print" style={{ marginBottom: 'var(--s-4)' }}>
         <LinkButton to={back} variant="subtle" style={{ paddingLeft: 0 }}><ArrowLeft size={18} /> {t('common.back', locale)}</LinkButton>
-        <Button variant="primary" onClick={() => window.print()}><Printer size={18} /> {t('report.print', locale)}</Button>
+        <div className="row" style={{ gap: 'var(--s-2)' }}>
+          {scope === 'month' && month ? (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                const text = buildMonthShareText(property, id, month, lines, categories, locale)
+                void sharePlainText(text, property.name).then((ok) => { if (ok) showToast({ message: t('share.done', locale) }) })
+              }}
+            >
+              <Share2 size={18} /> {t('share.action', locale)}
+            </Button>
+          ) : null}
+          <Button variant="primary" onClick={() => window.print()}><Printer size={18} /> {t('report.print', locale)}</Button>
+        </div>
       </div>
 
       <h1 className="title">{t('report.title', locale, { property: property.name, period })}</h1>

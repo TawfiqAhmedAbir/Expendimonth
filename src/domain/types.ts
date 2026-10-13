@@ -26,6 +26,8 @@ export type Settings = {
   pinSalt: string | null
   lastExportAt: number | null
   coachDismissed: boolean
+  remindersEnabled: boolean
+  reminderLastFiredAt: number | null
 }
 
 export type UserCategory = {
@@ -37,6 +39,10 @@ export type UserCategory = {
   lastUsedAt: number
   lastAmountCents: number | null
   useCount: number
+  standing?: boolean
+  standingAmountCents?: number | null
+  /** Soft monthly cap for money-out categories. */
+  budgetCents?: number | null
 }
 
 export type MonthRecord = {
@@ -69,7 +75,7 @@ export type AttachmentRecord = {
 }
 
 export type BackupPayload = {
-  version: 3
+  version: 4
   exportedAt: string
   settings: Settings
   properties: Property[]

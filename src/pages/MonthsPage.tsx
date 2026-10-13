@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { Sparkline } from '../components/charts'
 import { getCategoryLabel } from '../domain/categories'
 import {
+  closedMonthStreak,
   currentYearMonth,
   formatMoney,
   formatOccurredOn,
@@ -45,6 +46,7 @@ export function MonthsPage() {
   const [query, setQuery] = useState('')
 
   const current = currentYearMonth()
+  const streak = closedMonthStreak(months, property.id, current)
   const last12 = useMemo(() => yearMonthsBack(current, 12), [current])
 
   useEffect(() => {
@@ -87,7 +89,10 @@ export function MonthsPage() {
 
   return (
     <ScreenShell showSwitcher>
-      <h1 className="title">{t('months.title', locale)}</h1>
+      <div className="row row--between" style={{ marginBottom: 'var(--s-2)' }}>
+        <h1 className="title" style={{ margin: 0 }}>{t('months.title', locale)}</h1>
+        {streak >= 2 ? <Badge status="done">{t('streak.badge', locale, { n: String(streak) })}</Badge> : null}
+      </div>
       <div className="row" style={{ marginBottom: 'var(--s-3)' }}>
         <div className="row grow" style={{ position: 'relative' }}>
           <Search size={18} style={{ position: 'absolute', left: 14, color: 'var(--ink-3)' }} aria-hidden />

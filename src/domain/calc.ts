@@ -313,3 +313,50 @@ export function reconcileMismatch(month: MonthRecord, lines: LineItem[]): boolea
   if (month.reconcileOutCents !== null && month.reconcileOutCents !== o) return true
   return false
 }
+
+/** Average money-out over months with out > 0, up to lastN most recent in series order. */
+export function averageMonthlyOutCents(series: SeriesPoint[], lastN = 6): number | null {
+  const withOut = series.filter((p) => p.outCents > 0)
+  if (withOut.length < 2) return null
+  const slice = withOut.slice(-lastN)
+  const sum = slice.reduce((s, p) => s + p.outCents, 0)
+  return Math.round(sum / slice.length)
+}
+
+/** Whole months of balance at recent average spending; null when not meaningful. */
+export function runwayMonths(balanceCents: number, avgOutCents: number | null): number | null {
+  if (avgOutCents === null || avgOutCents <= 0 || balanceCents <= 0) return null
+  return Math.floor(balanceCents / avgOutCents)
+}
+
+/** Consecutive closed months ending at the month before fromYm. */
+export function closedMonthStreak(months: MonthRecord[], propertyId: string, fromYm: string): number {
+  let ym: string | null = previousYearMonth(fromYm)
+  let count = 0
+  while (ym) {
+    const m = months.find((x) => x.propertyId === propertyId && x.yearMonth === ym)
+    if (!m || m.status !== 'done') break
+    count += 1
+    ym = previousYearMonth(ym)
+  }
+  return count
+}
+
+export function categorySpend(lines: LineItem[], categoryId: string, type: LineType): number {
+  return lines.filter((l) => l.type === type && l.categoryId === categoryId).reduce((s, l) => s + l.amountCents, 0)
+}
+
+export function linesOnDay(lines: LineItem[], day: string): LineItem[] {
+  return lines.filter((l) => l.occurredOn === day)
+}
+
+export function dayActivityMap(lines: LineItem[]): Map<string, { inCents: number; outCents: number }> {
+  const map = new Map<string, { inCents: number; outCents: number }>()
+  for (const l of lines) {
+    const cur = map.get(l.occurredOn) ?? { inCents: 0, outCents: 0 }
+    if (l.type === 'in') cur.inCents += l.amountCents
+    else cur.outCents += l.amountCents
+    map.set(l.occurredOn, cur)
+  }
+  return map
+}

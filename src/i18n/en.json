@@ -220,5 +220,45 @@
 
   "running.totalIn": "Total in",
   "running.totalOut": "Total out",
-  "running.net": "What's left"
+  "running.net": "What's left",
+
+  "home.monthClosed": "This month is closed.",
+
+  "runway.body": "At recent spending, your balance might last about {n} months.",
+
+  "share.action": "Share summary",
+  "share.done": "Copied or shared",
+
+  "streak.badge": "{n} closed in a row",
+
+  "calendar.title": "Days this month",
+  "calendar.day": "Day {day}",
+  "calendar.hint": "Tap a day to filter lines below.",
+
+  "standing.title": "Every month",
+  "standing.hint": "Tap to add the usual amount.",
+  "standing.toggle": "Repeat every month",
+  "standing.everyMonth": "Yes, every month",
+  "standing.amount": "Usual amount",
+
+  "budget.title": "Planned limits",
+  "budget.limit": "Monthly limit (optional)",
+  "budget.optional": "Optional",
+  "budget.ofLimit": "{pct}% of limit",
+
+  "filter.clear": "Show all",
+  "filter.category": "Showing: {name}",
+  "filter.noLines": "No lines match this filter.",
+
+  "portfolio.title": "All properties",
+  "portfolio.sub": "Each property in its own currency. Tap to switch.",
+  "portfolio.thisMonth": "This month",
+  "portfolio.tile": "All properties",
+  "portfolio.tileHint": "Overview",
+
+  "reminder.settingsTitle": "Reminders",
+  "reminder.enable": "Gentle reminders",
+  "reminder.note": "When you open the app — e.g. close last month or log spending.",
+  "reminder.quietWeek": "You haven't added anything this week. A quick line keeps the month accurate.",
+  "reminder.openPrev": "Last month is still open. Close it when it matches your paper."
 }

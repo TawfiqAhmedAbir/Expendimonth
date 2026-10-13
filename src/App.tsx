@@ -9,6 +9,7 @@ import { LockPage } from './pages/LockPage'
 import { MonthPage } from './pages/MonthPage'
 import { MonthsPage } from './pages/MonthsPage'
 import { MorePage } from './pages/MorePage'
+import { PortfolioPage } from './pages/PortfolioPage'
 import { NewPropertyPage, PropertiesPage } from './pages/PropertiesPage'
 import { ReportPage } from './pages/ReportPage'
 import { SetupPage } from './pages/SetupPage'
@@ -52,6 +53,7 @@ function AppRoutes() {
       <Route path="/months" element={guard(<MonthsPage />)} />
       <Route path="/year/:year" element={guard(<YearSummaryPage />)} />
       <Route path="/insights" element={guard(<InsightsPage />)} />
+      <Route path="/portfolio" element={guard(<PortfolioPage />)} />
       <Route path="/report/:scope/:id" element={guard(<ReportPage />)} />
       <Route path="/more" element={guard(<MorePage />)} />
       <Route path="/categories" element={guard(<CategoriesPage />)} />

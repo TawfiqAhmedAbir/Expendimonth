@@ -210,7 +210,7 @@ export async function buildBackup(): Promise<BackupPayload> {
   )
   patchSettings({ lastExportAt: Date.now() })
   return {
-    version: 3,
+    version: 4,
     exportedAt: new Date().toISOString(),
     settings: loadSettings(),
     properties,
@@ -224,10 +224,11 @@ export async function buildBackup(): Promise<BackupPayload> {
 export function parseBackup(raw: unknown): BackupPayload | null {
   if (!raw || typeof raw !== 'object') return null
   const p = raw as Partial<BackupPayload>
-  if (p.version !== 3) return null
+  const ver = p.version as number | undefined
+  if (ver !== 3 && ver !== 4) return null
   if (!p.settings || typeof p.settings !== 'object') return null
   if (!Array.isArray(p.properties) || !Array.isArray(p.months) || !Array.isArray(p.lines) || !Array.isArray(p.categories) || !Array.isArray(p.attachments)) return null
-  return p as BackupPayload
+  return { ...(p as BackupPayload), version: 4 }
 }
 
 /** Replace everything on this phone with a version-3 backup file. */

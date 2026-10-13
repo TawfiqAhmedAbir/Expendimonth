@@ -13,9 +13,10 @@ type Props = {
   /** Tapping the row opens the editor (which also offers Delete). */
   onEdit?: () => void
   readOnly?: boolean
+  highlight?: boolean
 }
 
-export function LineItemRow({ line, categories, currencyCode, locale, onEdit, readOnly }: Props) {
+export function LineItemRow({ line, categories, currencyCode, locale, onEdit, readOnly, highlight }: Props) {
   const cat = categories.find((c) => c.id === line.categoryId)
   const label = getCategoryLabel(line.categoryId, categories)
   const amount = `${line.type === 'out' ? '−' : '+'}${formatMoney(line.amountCents, currencyCode, locale)}`
@@ -36,7 +37,7 @@ export function LineItemRow({ line, categories, currencyCode, locale, onEdit, re
   )
 
   return (
-    <div className={`line${readOnly ? ' line--muted' : ''}`}>
+    <div className={`line${readOnly ? ' line--muted' : ''}${highlight ? ' line--highlight' : ''}`}>
       {canEdit ? (
         <button type="button" className="line__main" onClick={onEdit} aria-label={`${t('line.edit', locale)}: ${label}, ${amount}`}>
           {body}

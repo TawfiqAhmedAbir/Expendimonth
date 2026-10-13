@@ -30,7 +30,10 @@ export async function createCategory(propertyId: string, label: string): Promise
   return category
 }
 
-export async function updateCategory(id: string, patch: Partial<Pick<UserCategory, 'label' | 'icon'>>): Promise<void> {
+export async function updateCategory(
+  id: string,
+  patch: Partial<Pick<UserCategory, 'label' | 'icon' | 'standing' | 'standingAmountCents' | 'budgetCents'>>,
+): Promise<void> {
   const db = await getDb()
   const cat = await db.get('categories', id)
   if (!cat) return

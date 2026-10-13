@@ -87,13 +87,32 @@ export function NetLine({ series, currencyCode, locale, height = 180 }: Common &
 
 const DONUT = ['#1f4f5e', '#2b6b4f', '#b7791f', '#7a4e8c', '#c2553f', '#3b6fb6', '#5f8f6a', '#9a6b3f']
 
-export function Donut({ slices, currencyCode, locale, height = 200 }: Common & { slices: { label: string; cents: number }[] }) {
-  const data = slices.map((s) => ({ name: s.label, value: s.cents / 100 }))
+export function Donut({
+  slices,
+  currencyCode,
+  locale,
+  height = 200,
+  onSelectSlice,
+}: Common & { slices: { id?: string; label: string; cents: number }[]; onSelectSlice?: (id: string) => void }) {
+  const data = slices.map((s) => ({ id: s.id, name: s.label, value: s.cents / 100 }))
   return (
     <div style={{ width: '100%', height }}>
       <ResponsiveContainer>
         <PieChart>
-          <Pie data={data} dataKey="value" nameKey="name" innerRadius="55%" outerRadius="85%" paddingAngle={2} stroke="none">
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="name"
+            innerRadius="55%"
+            outerRadius="85%"
+            paddingAngle={2}
+            stroke="none"
+            style={onSelectSlice ? { cursor: 'pointer' } : undefined}
+            onClick={(_, index) => {
+              const id = data[index]?.id
+              if (id && onSelectSlice) onSelectSlice(id)
+            }}
+          >
             {data.map((_, i) => (
               <Cell key={i} fill={DONUT[i % DONUT.length]} />
             ))}

@@ -1,5 +1,6 @@
 import { Lock } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { formatMoney, formatYearMonthLabel, net, parseMoneyToCents, totalIn, totalOut } from '../domain/calc'
 import type { LineItem, MonthRecord } from '../domain/types'
 import { Button, Field, Sheet, Steps } from '../design-kit/Primitives'
@@ -21,6 +22,7 @@ export function CloseMonthFlow({ open, month, lines, currencyCode, locale, onClo
   const [step, setStep] = useState(0)
   const [paperIn, setPaperIn] = useState('')
   const [paperOut, setPaperOut] = useState('')
+  const [celebrate, setCelebrate] = useState(false)
 
   // Reset only when the sheet opens; `month` is replaced on every refresh and must not reset the step.
   useEffect(() => {
@@ -28,6 +30,7 @@ export function CloseMonthFlow({ open, month, lines, currencyCode, locale, onClo
     setStep(0)
     setPaperIn(month.reconcileInCents !== null ? (month.reconcileInCents / 100).toFixed(2) : '')
     setPaperOut(month.reconcileOutCents !== null ? (month.reconcileOutCents / 100).toFixed(2) : '')
+    setCelebrate(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -88,12 +91,14 @@ export function CloseMonthFlow({ open, month, lines, currencyCode, locale, onClo
           <div className="row">
             <Button className="grow" onClick={() => setStep(1)}>{t('common.back', locale)}</Button>
             <Button
-              className="grow"
+              className={`grow${celebrate ? ' close-celebrate' : ''}`}
               variant="primary"
+              style={celebrate ? ({ animation: 'close-pop 0.6s ease' } as CSSProperties) : undefined}
               onClick={async () => {
                 haptic([10, 40, 10])
+                setCelebrate(true)
                 await onConfirm()
-                onClose()
+                window.setTimeout(() => onClose(), 400)
               }}
             >
               <Lock size={18} /> {t('close.confirm', locale)}

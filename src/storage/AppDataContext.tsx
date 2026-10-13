@@ -71,6 +71,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, [refresh])
 
   useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void refresh()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [refresh])
+
+  useEffect(() => {
     document.documentElement.dataset.theme = settings.theme
     const meta = document.querySelector('meta[name="theme-color"]')
     if (meta) meta.setAttribute('content', settings.theme === 'dark' ? '#15130f' : '#f6f2ec')

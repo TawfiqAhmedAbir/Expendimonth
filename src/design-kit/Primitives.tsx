@@ -59,6 +59,7 @@ export function Card({ children, variant = 'raised', className = '', style }: Ca
 
 type ChipProps = {
   active?: boolean
+  disabled?: boolean
   onClick?: () => void
   onLongPress?: () => void
   children: ReactNode
@@ -66,7 +67,7 @@ type ChipProps = {
   'aria-label'?: string
 }
 
-export function Chip({ active, onClick, onLongPress, children, meta, 'aria-label': ariaLabel }: ChipProps) {
+export function Chip({ active, disabled, onClick, onLongPress, children, meta, 'aria-label': ariaLabel }: ChipProps) {
   let timer: number | null = null
   const start = () => {
     if (!onLongPress) return
@@ -87,6 +88,7 @@ export function Chip({ active, onClick, onLongPress, children, meta, 'aria-label
       className={`chip${active ? ' chip--active' : ''}`}
       aria-label={ariaLabel}
       aria-pressed={active}
+      disabled={disabled}
       onClick={onClick}
       onPointerDown={start}
       onPointerUp={cancel}
@@ -202,6 +204,25 @@ export function Field({ label, htmlFor, children }: { label: string; htmlFor?: s
     <div className="field">
       <label htmlFor={htmlFor}>{label}</label>
       {children}
+    </div>
+  )
+}
+
+type ProgressBarProps = {
+  value: number
+  max: number
+  over?: boolean
+  label?: string
+}
+
+export function ProgressBar({ value, max, over, label }: ProgressBarProps) {
+  const pct = max > 0 ? Math.min(value / max, 1.5) : 0
+  const width = `${Math.min(pct * 100, 100)}%`
+  return (
+    <div className="progress" aria-label={label}>
+      <div className="progress__track">
+        <div className={`progress__fill${over ? ' progress__fill--over' : ''}`} style={{ width }} />
+      </div>
     </div>
   )
 }
