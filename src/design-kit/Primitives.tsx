@@ -1,6 +1,8 @@
-import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react'
+import type { ButtonHTMLAttributes, CSSProperties, ReactNode, PointerEvent as ReactPointerEvent } from 'react'
+import { useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
+import { useOverlayLifecycle } from './overlayLifecycle'
 
 type ButtonVariant = 'primary' | 'in' | 'out' | 'ghost' | 'subtle' | 'danger'
 
@@ -114,13 +116,57 @@ type SheetProps = {
 }
 
 export function Sheet({ open, onClose, title, children }: SheetProps) {
-  if (!open) return null
+  const { mounted, exiting } = useOverlayLifecycle(open)
+  const dragY = useRef(0)
+  const sheetRef = useRef<HTMLDivElement>(null)
+
+  if (!mounted) return null
+
+  function onGrabPointerDown(e: ReactPointerEvent) {
+    dragY.current = e.clientY
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  function onGrabPointerMove(e: ReactPointerEvent) {
+    if (!sheetRef.current || !e.currentTarget.hasPointerCapture(e.pointerId)) return
+    const dy = Math.max(0, e.clientY - dragY.current)
+    sheetRef.current.style.transform = `translateY(${dy}px)`
+  }
+
+  function onGrabPointerUp(e: ReactPointerEvent) {
+    if (!sheetRef.current) return
+    const dy = e.clientY - dragY.current
+    sheetRef.current.style.transform = ''
+    if (dy > 80) onClose()
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {
+      /* ignore */
+    }
+  }
+
   // Portal to <body>: ancestors with backdrop-filter/transform (e.g. .topbar) would
   // otherwise become the containing block for this fixed-position overlay.
   return createPortal(
-    <div className="sheet-backdrop" role="presentation" onClick={onClose}>
-      <div className="sheet" role="dialog" aria-modal onClick={(e) => e.stopPropagation()}>
-        <div className="sheet__grab" />
+    <div
+      className={`sheet-backdrop${exiting ? ' sheet-backdrop--out' : ''}`}
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        ref={sheetRef}
+        className={`sheet${exiting ? ' sheet--out' : ''}`}
+        role="dialog"
+        aria-modal
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="sheet__grab"
+          onPointerDown={onGrabPointerDown}
+          onPointerMove={onGrabPointerMove}
+          onPointerUp={onGrabPointerUp}
+          onPointerCancel={onGrabPointerUp}
+        />
         {title ? <h2 className="sheet__title">{title}</h2> : null}
         {children}
       </div>
@@ -173,7 +219,7 @@ export function StatRing({ ratio, size = 180, stroke = 14, tone = 'accent', chil
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={`${dash} ${c - dash}`}
-          style={{ transition: 'stroke-dasharray 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)' }}
+          style={{ transition: `stroke-dasharray var(--dur-slow) var(--ease-out)` }}
         />
       </svg>
       <div className="ring__center">{children}</div>

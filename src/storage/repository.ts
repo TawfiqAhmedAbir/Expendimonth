@@ -8,7 +8,7 @@ import type {
 import { clampDateToMonth, defaultOccurredOn, deriveMonthStatus, occurredOnFromCreatedAt } from '../domain/calc'
 import { getDb, monthIdFor } from './db'
 import { listProperties } from './properties'
-import { loadSettings, patchSettings, saveSettings } from './settings'
+import { loadSettings, saveSettings } from './settings'
 
 export { loadSettings, saveSettings, patchSettings } from './settings'
 

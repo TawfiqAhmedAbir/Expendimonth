@@ -83,6 +83,9 @@
   "home.better": "better",
   "home.worse": "worse",
   "home.openMonth": "Open this month",
+  "home.compareLast": "Last month (same scale)",
+  "home.insightsSummary": "Notes vs last month",
+  "home.portfolioLink": "All properties",
 
   "time.today": "today",
   "time.yesterday": "yesterday",
@@ -174,6 +177,7 @@
   "insights.whereIn": "Where money came from",
   "insights.noData": "Add a few lines to see insights.",
   "insights.selectMonth": "Month",
+  "insights.tapMonth": "Tap a month in the chart",
 
   "status.open": "In progress",
   "status.checked": "Checked",

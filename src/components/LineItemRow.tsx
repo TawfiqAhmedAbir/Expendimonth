@@ -1,3 +1,4 @@
+import type { CSSProperties as ReactCSSProperties } from 'react'
 import { ArrowLeftRight, ChevronRight, Scale } from 'lucide-react'
 import { formatMoney, formatOccurredOn } from '../domain/calc'
 import { getCategoryLabel } from '../domain/categories'
@@ -14,9 +15,11 @@ type Props = {
   onEdit?: () => void
   readOnly?: boolean
   highlight?: boolean
+  /** Staggered enter animation index in a list. */
+  enterIndex?: number
 }
 
-export function LineItemRow({ line, categories, currencyCode, locale, counterpartyName, onEdit, readOnly, highlight }: Props) {
+export function LineItemRow({ line, categories, currencyCode, locale, counterpartyName, onEdit, readOnly, highlight, enterIndex }: Props) {
   const cat = categories.find((c) => c.id === line.categoryId)
   const name = counterpartyName || t('switcher.title', locale)
   let label = getCategoryLabel(line.categoryId, categories)
@@ -52,8 +55,13 @@ export function LineItemRow({ line, categories, currencyCode, locale, counterpar
     </>
   )
 
+  const enterStyle = enterIndex !== undefined ? ({ ['--line-i' as string]: enterIndex } as ReactCSSProperties) : undefined
+
   return (
-    <div className={`line${readOnly ? ' line--muted' : ''}${highlight ? ' line--highlight' : ''}`}>
+    <div
+      className={`line${readOnly ? ' line--muted' : ''}${highlight ? ' line--highlight' : ''}${enterIndex !== undefined ? ' line--enter' : ''}`}
+      style={enterStyle}
+    >
       {canEdit ? (
         <button type="button" className="line__main" onClick={onEdit} aria-label={`${t('line.edit', locale)}: ${label}, ${amount}`}>
           {body}

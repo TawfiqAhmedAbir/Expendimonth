@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import type { AmountPadResult } from '../components/AmountPadSheet'
 import { useToast } from '../components/Toast'
+import { haptic } from '../design-kit/motion'
 import { clampDateToMonth } from '../domain/calc'
 import type { LineItem, MonthRecord } from '../domain/types'
 import { t } from '../i18n'
@@ -44,6 +45,7 @@ export function useMonthLineActions(propertyId: string, locale: string) {
       else await addLine(month.id, payload)
       if (month.status === 'checked') await setMonthStatus(month.id, 'open')
       await refresh()
+      haptic(12)
       showToast({ message: t('line.saved', locale) })
       return true
     },

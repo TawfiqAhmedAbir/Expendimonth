@@ -106,6 +106,15 @@ export function MonthsPage() {
         ))}
       </div>
 
+      {byYear.length > 0 ? (
+        <div className="months-legend row row--between" aria-hidden>
+          <span>{t('money.in', locale)}</span>
+          <span>{t('money.out', locale)}</span>
+          <span>{t('money.left', locale)}</span>
+          <span style={{ width: 56 }} />
+        </div>
+      ) : null}
+
       {byYear.length === 0 ? <p className="muted">{t('months.noResults', locale)}</p> : null}
 
       {byYear.map(([year, list]) => {

@@ -4,7 +4,7 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import { AmountKeypadSheet } from '../components/AmountKeypad'
 import { AmountPadSheet, type AmountPadResult } from '../components/AmountPadSheet'
 import { CloseMonthFlow } from '../components/CloseMonthFlow'
-import { HeroTotals } from '../components/HeroTotals'
+import { MoneyFlowBar } from '../components/MoneyFlowBar'
 import { LastMonthChecklist } from '../components/LastMonthChecklist'
 import { LineItemRow } from '../components/LineItemRow'
 import { MonthCalendarStrip } from '../components/MonthCalendarStrip'
@@ -12,7 +12,6 @@ import { MonthStartSheet } from '../components/MonthStartSheet'
 import { StandingItemsRow, standingLinePayload } from '../components/StandingItemsRow'
 import { TransferSheet } from '../components/TransferSheet'
 import { useToast } from '../components/Toast'
-import { InOutBars } from '../components/charts'
 import { CategoryEditSheet } from './CategoriesPage'
 import { getCategoryLabel } from '../domain/categories'
 import { buildMonthShareText, sharePlainText } from '../domain/shareText'
@@ -136,7 +135,7 @@ export function MonthPage() {
       showToast({ message: t('cash.same', locale) })
       return
     }
-    await addLine(month.id, {
+    await addLine(month!.id, {
       type: 'adjust',
       amountCents: delta,
       categoryId: '',
@@ -148,7 +147,7 @@ export function MonthPage() {
   }
 
   async function confirmStart(picked: typeof start.items) {
-    await addLines(month.id, picked.map((item) => ({
+    await addLines(month!.id, picked.map((item) => ({
       type: item.type,
       amountCents: item.amountCents,
       categoryId: item.categoryId,
@@ -215,8 +214,14 @@ export function MonthPage() {
           <p className="muted" style={{ margin: 0 }}>{t('month.emptyPrompt', locale)}</p>
         </Card>
       ) : flowLines.length > 0 ? (
-        <Card>
-          <HeroTotals lines={lines} currencyCode={currency} locale={locale} />
+        <Card className="month-hero">
+          <MoneyFlowBar
+            inCents={totalIn(lines)}
+            outCents={totalOut(lines)}
+            locale={locale}
+            currencyCode={currency}
+            label={formatYearMonthLabel(yearMonth, locale)}
+          />
         </Card>
       ) : null}
 
@@ -263,9 +268,10 @@ export function MonthPage() {
               {t('filter.category', locale, { name: getCategoryLabel(filterCategory, categories) })}
             </p>
           ) : null}
-          {visibleLines.map((line) => (
+          {visibleLines.map((line, i) => (
             <LineItemRow
               key={line.id}
+              enterIndex={i}
               line={line}
               categories={categories}
               currencyCode={currency}
@@ -390,9 +396,6 @@ export function MonthPage() {
 
       <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title={t('month.moreOptions', locale)}>
         <div className="stack">
-          {flowLines.length > 0 ? (
-            <InOutBars series={[{ yearMonth, inCents: totalIn(lines), outCents: totalOut(lines), netCents: net(lines) }]} currencyCode={currency} locale={locale} height={140} />
-          ) : null}
           {lines.length > 0 ? (
             <MonthCalendarStrip
               yearMonth={yearMonth}

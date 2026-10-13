@@ -1,8 +1,8 @@
-import { ArrowRight, BarChart3, CalendarDays, Layers, Minus, Plus, Wallet } from 'lucide-react'
+import { ArrowRight, Layers, Minus, Plus } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { AmountKeypadSheet } from '../components/AmountKeypad'
 import { AmountPadSheet, type AmountPadResult } from '../components/AmountPadSheet'
-import { HeroTotals } from '../components/HeroTotals'
+import { MoneyFlowBar } from '../components/MoneyFlowBar'
 import { MonthStartSheet } from '../components/MonthStartSheet'
 import { ReminderBanner } from '../components/ReminderBanner'
 import { standingLinePayload } from '../components/StandingItemsRow'
@@ -30,7 +30,7 @@ import {
   yearMonthsBack,
   type CategoryChange,
 } from '../domain/calc'
-import { Badge, Button, Card, LinkButton, ProgressBar, StatRing, Tile } from '../design-kit/Primitives'
+import { Badge, Button, Card, LinkButton, ProgressBar } from '../design-kit/Primitives'
 import { useCountUp } from '../design-kit/motion'
 import { ScreenShell } from '../design-kit/ScreenShell'
 import { useMonthLineActions } from '../hooks/useMonthLineActions'
@@ -77,8 +77,17 @@ export function HomePage() {
   const outC = totalOut(lines)
   const netC = net(lines)
   const netAnimated = useCountUp(netC)
-  const ratio = inC > 0 ? outC / inC : 0
   const isEmpty = lines.length === 0
+
+  const prevYm = previousYearMonth(ym)
+  const prevLines = useMemo(() => {
+    if (!prevYm) return []
+    const prev = monthsByYearMonth.get(prevYm)
+    return prev ? (linesByMonthId.get(prev.id) ?? []) : []
+  }, [prevYm, monthsByYearMonth, linesByMonthId])
+  const prevIn = totalIn(prevLines)
+  const prevOut = totalOut(prevLines)
+  const flowScale = Math.max(inC, prevIn, 1)
 
   const insight = useMemo(() => {
     const prevYm = previousYearMonth(ym)
@@ -202,19 +211,37 @@ export function HomePage() {
       ) : null}
 
       <Card>
-        <div style={{ display: 'grid', placeItems: 'center', padding: 'var(--s-2) 0 var(--s-4)' }}>
-          <StatRing ratio={isEmpty ? 0 : ratio} tone={ratio > 1 ? 'out' : 'accent'} size={200}>
-            <span className="caption">{t('money.leftThisMonth', locale)}</span>
-            <span className={`money money--hero ${netC < 0 ? 'money--out' : ''}`} style={{ fontSize: '2rem' }}>
-              {formatMoney(netAnimated, currency, locale)}
-            </span>
-            {!isEmpty && inC > 0 ? (
-              <span className="caption">{t('money.spentOfIn', locale, { pct: String(Math.round(ratio * 100)) })}</span>
-            ) : null}
-          </StatRing>
-        </div>
-        <HeroTotals lines={lines} currencyCode={currency} locale={locale} showNet={false} />
-        <div className="totals" style={{ marginTop: 'var(--s-3)' }}>
+        {!isEmpty ? (
+          <MoneyFlowBar
+            inCents={inC}
+            outCents={outC}
+            scaleInCents={flowScale}
+            label={t('home.thisMonth', locale)}
+            locale={locale}
+            currencyCode={currency}
+          />
+        ) : (
+          <p className="muted" style={{ margin: 0, textAlign: 'center' }}>{t('home.noActivity', locale)}</p>
+        )}
+        {!isEmpty ? (
+          <p className={`money money--hero${netC < 0 ? ' money--out' : ''}`} style={{ textAlign: 'center', margin: 'var(--s-4) 0 0' }}>
+            {formatMoney(netAnimated, currency, locale)}
+          </p>
+        ) : null}
+        {!isEmpty && prevIn > 0 ? (
+          <div style={{ marginTop: 'var(--s-5)' }}>
+            <MoneyFlowBar
+              inCents={prevIn}
+              outCents={prevOut}
+              scaleInCents={flowScale}
+              label={t('home.compareLast', locale)}
+              locale={locale}
+              currencyCode={currency}
+              compact
+            />
+          </div>
+        ) : null}
+        <div className="totals" style={{ marginTop: 'var(--s-4)' }}>
           <div className="totals__row" style={{ fontWeight: 800 }}>
             <span>{t('money.haveNow', locale)}</span>
             <span className="money">{formatMoney(haveNow, currency, locale)}</span>
@@ -231,21 +258,28 @@ export function HomePage() {
             <ProgressBar value={Math.min(runway, 12)} max={12} label={t('runway.body', locale, { n: String(runway) })} />
           </div>
         ) : null}
-        {insight ? (
-          <div className={`insight ${insight.better ? 'insight--positive' : 'insight--negative'}`} style={{ marginTop: 'var(--s-4)' }}>
-            {t('home.vsLast', locale, {
-              amount: formatMoney(Math.abs(insight.deltaCents), currency, locale),
-              direction: insight.better ? t('home.better', locale) : t('home.worse', locale),
-            })}
-          </div>
-        ) : null}
-        {categoryMove ? (
-          <div className={`insight ${categoryTone(categoryMove)}`} style={{ marginTop: 'var(--s-3)' }}>
-            {t(categoryMove.deltaCents > 0 ? 'home.categoryUp' : 'home.categoryDown', locale, {
-              category: getCategoryLabel(categoryMove.categoryId, categories),
-              amount: formatMoney(Math.abs(categoryMove.deltaCents), currency, locale),
-            })}
-          </div>
+        {insight || categoryMove ? (
+          <details className="disclosure" style={{ marginTop: 'var(--s-4)' }}>
+            <summary className="disclosure__summary">{t('home.insightsSummary', locale)}</summary>
+            <div className="disclosure__body">
+              {insight ? (
+                <div className={`insight ${insight.better ? 'insight--positive' : 'insight--negative'}`}>
+                  {t('home.vsLast', locale, {
+                    amount: formatMoney(Math.abs(insight.deltaCents), currency, locale),
+                    direction: insight.better ? t('home.better', locale) : t('home.worse', locale),
+                  })}
+                </div>
+              ) : null}
+              {categoryMove ? (
+                <div className={`insight ${categoryTone(categoryMove)}`}>
+                  {t(categoryMove.deltaCents > 0 ? 'home.categoryUp' : 'home.categoryDown', locale, {
+                    category: getCategoryLabel(categoryMove.categoryId, categories),
+                    amount: formatMoney(Math.abs(categoryMove.deltaCents), currency, locale),
+                  })}
+                </div>
+              ) : null}
+            </div>
+          </details>
         ) : null}
         <p className="caption" style={{ margin: 'var(--s-4) 0 0', textAlign: 'center' }}>
           {last
@@ -300,14 +334,11 @@ export function HomePage() {
         </LinkButton>
       )}
 
-      <div className="tiles" style={{ marginTop: 'var(--s-5)' }}>
-        <Tile to={`/month/${ym}`} icon={<Wallet size={24} />} label={t('home.tileMonth', locale)} hint={t('home.tileMonthHint', locale)} />
-        <Tile to="/months" icon={<CalendarDays size={24} />} label={t('home.tileHistory', locale)} hint={t('home.tileHistoryHint', locale)} />
-        <Tile to="/insights" icon={<BarChart3 size={24} />} label={t('home.tileInsights', locale)} hint={t('home.tileInsightsHint', locale)} />
-        {properties.length > 1 ? (
-          <Tile to="/portfolio" icon={<Layers size={24} />} label={t('portfolio.tile', locale)} hint={t('portfolio.tileHint', locale)} />
-        ) : null}
-      </div>
+      {properties.length > 1 ? (
+        <LinkButton to="/portfolio" variant="ghost" block style={{ marginTop: 'var(--s-4)' }}>
+          <Layers size={18} /> {t('home.portfolioLink', locale)}
+        </LinkButton>
+      ) : null}
 
       <AmountKeypadSheet
         open={counting}

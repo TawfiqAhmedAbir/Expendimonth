@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Donut, DONUT_COLORS, InOutBars, NetLine } from '../components/charts'
+import { CategoryBreakdownBars } from '../components/CategoryBreakdownBars'
+import { InOutBars, NetLine } from '../components/charts'
 import { getCategoryLabel } from '../domain/categories'
 import {
   biggestCategoryChange,
   categoryBreakdown,
-  categorySpend,
   compareNetToPreviousMonth,
   currentYearMonth,
   formatMoney,
@@ -20,6 +20,7 @@ import {
   type CategoryChange,
 } from '../domain/calc'
 import { Card, Chip, LinkButton } from '../design-kit/Primitives'
+import { haptic } from '../design-kit/motion'
 import { ScreenShell } from '../design-kit/ScreenShell'
 import { t } from '../i18n'
 import { useActiveProperty, useAppData } from '../storage/AppDataContext'
@@ -77,6 +78,11 @@ export function InsightsPage() {
   const delta = (d: { deltaCents: number; better: boolean } | null) =>
     d ? <span className={`money ${d.better ? 'money--in' : 'money--out'}`}>{d.better ? '+' : '−'}{formatMoney(Math.abs(d.deltaCents), currency, locale)}</span> : <span className="muted">—</span>
 
+  function pickMonth(ym: string) {
+    haptic(6)
+    setSelected(ym)
+  }
+
   return (
     <ScreenShell showSwitcher>
       <h1 className="title">{t('insights.title', locale)}</h1>
@@ -87,23 +93,22 @@ export function InsightsPage() {
         <div className="stack">
           <Card>
             <h2 className="section" style={{ marginTop: 0 }}>{t('insights.inOut', locale)}</h2>
-            <InOutBars series={series} currencyCode={currency} locale={locale} onSelect={(ym) => navigate(`/month/${ym}`)} />
-          </Card>
-
-          <Card>
-            <h2 className="section" style={{ marginTop: 0 }}>{t('insights.net', locale)}</h2>
-            <NetLine series={series} currencyCode={currency} locale={locale} />
-          </Card>
-
-          <Card>
-            <div className="stack" style={{ gap: 'var(--s-2)', marginBottom: 'var(--s-3)' }}>
-              <h2 className="section" style={{ margin: 0 }}>{formatYearMonthLabel(selected, locale)}</h2>
-              <select className="input" style={{ minHeight: '2.75rem', fontSize: '1rem' }} value={selected} onChange={(e) => setSelected(e.target.value)} aria-label={t('insights.selectMonth', locale)}>
-                {[...last12].reverse().map((ym) => (
-                  <option key={ym} value={ym}>{formatYearMonthLabel(ym, locale)}</option>
-                ))}
-              </select>
+            <p className="caption" style={{ marginTop: 0 }}>{t('insights.tapMonth', locale)}</p>
+            <InOutBars
+              series={series}
+              currencyCode={currency}
+              locale={locale}
+              selectedYm={selected}
+              onSelect={pickMonth}
+            />
+            <div style={{ marginTop: 'var(--s-5)' }}>
+              <h2 className="section">{t('insights.net', locale)}</h2>
+              <NetLine series={series} currencyCode={currency} locale={locale} />
             </div>
+          </Card>
+
+          <Card>
+            <h2 className="section" style={{ marginTop: 0 }}>{formatYearMonthLabel(selected, locale)}</h2>
             <div className="totals" style={{ borderTop: 'none', paddingTop: 0 }}>
               <div className="totals__row"><span>{t('money.left', locale)}</span><strong className="money">{formatMoney(selNet, currency, locale)}</strong></div>
               <div className="totals__row"><span>{t('insights.vsLast', locale)}</span>{delta(vsLast)}</div>
@@ -118,11 +123,11 @@ export function InsightsPage() {
               </div>
             ) : null}
             <div className="row" style={{ marginTop: 'var(--s-3)' }}>
-              <LinkButton to={`/month/${selected}`} variant="ghost" className="grow">{t('home.openMonth', locale)}</LinkButton>
+              <LinkButton to={`/month/${selected}`} variant="primary" className="grow">{t('home.openMonth', locale)}</LinkButton>
             </div>
           </Card>
 
-          <Card>
+          <Card variant="flat">
             <div className="stack" style={{ gap: 'var(--s-2)', marginBottom: 'var(--s-3)' }}>
               <h2 className="section" style={{ margin: 0 }}>{donutType === 'out' ? t('insights.where', locale) : t('insights.whereIn', locale)}</h2>
               <div className="chips">
@@ -133,36 +138,14 @@ export function InsightsPage() {
             {breakdown.length === 0 ? (
               <p className="muted" style={{ margin: 0 }}>{t('insights.noData', locale)}</p>
             ) : (
-              <>
-                <Donut
-                  slices={breakdown.map((b) => ({ id: b.categoryId, label: getCategoryLabel(b.categoryId, categories), cents: b.cents }))}
-                  currencyCode={currency}
-                  locale={locale}
-                  onSelectSlice={(id) => navigate(`/month/${selected}?category=${id}`)}
-                />
-                <div className="stack" style={{ marginTop: 'var(--s-3)' }}>
-                  {breakdown.map((b, i) => {
-                    const cat = categories.find((c) => c.id === b.categoryId)
-                    const budget = donutType === 'out' && cat?.budgetCents ? cat.budgetCents : null
-                    const spent = budget ? categorySpend(selLines, b.categoryId, 'out') : 0
-                    return (
-                    <button
-                      key={b.categoryId}
-                      type="button"
-                      className="row row--between"
-                      style={{ marginTop: 'var(--s-2)', width: '100%', border: 'none', background: 'transparent', textAlign: 'left', cursor: 'pointer', padding: 'var(--s-2) 0', font: 'inherit', color: 'inherit' }}
-                      onClick={() => navigate(`/month/${selected}?category=${b.categoryId}`)}
-                    >
-                      <span className="row"><span className="topbar__dot" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />{getCategoryLabel(b.categoryId, categories)}</span>
-                      <span className="money">
-                        {formatMoney(b.cents, currency, locale)} <span className="caption">{Math.round(b.share * 100)}%</span>
-                        {budget ? <span className="caption"> · {t('budget.ofLimit', locale, { pct: String(Math.min(999, Math.round((spent / budget) * 100))) })}</span> : null}
-                      </span>
-                    </button>
-                    )
-                  })}
-                </div>
-              </>
+              <CategoryBreakdownBars
+                slices={breakdown}
+                categories={categories}
+                currencyCode={currency}
+                locale={locale}
+                tone={donutType}
+                onSelect={(id) => navigate(`/month/${selected}?category=${id}`)}
+              />
             )}
           </Card>
 

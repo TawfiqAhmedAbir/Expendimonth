@@ -39,28 +39,44 @@ export function useThemeColors(): ThemeColors {
 
 type Common = { currencyCode: string; locale: string; height?: number }
 
-export function InOutBars({ series, currencyCode, locale, height = 200, onSelect }: Common & { series: SeriesPoint[]; onSelect?: (ym: string) => void }) {
+export function InOutBars({
+  series,
+  currencyCode,
+  locale,
+  height = 200,
+  selectedYm,
+  onSelect,
+}: Common & { series: SeriesPoint[]; selectedYm?: string; onSelect?: (ym: string) => void }) {
   const c = useThemeColors()
   const data = series.map((p) => ({ ym: p.yearMonth, name: formatMonthShort(p.yearMonth, locale), in: p.inCents / 100, out: p.outCents / 100 }))
+  const tick = { fontSize: 13, fill: c.ink3 }
   return (
-    <div style={{ width: '100%', height }}>
+    <div className="chart-mount" style={{ width: '100%', height }}>
       <ResponsiveContainer>
         <BarChart data={data} margin={{ top: 8, right: 4, left: -8, bottom: 0 }} onClick={(e) => {
           const ym = (e as { activePayload?: { payload?: { ym?: string } }[] })?.activePayload?.[0]?.payload?.ym
           if (ym && onSelect) onSelect(ym)
         }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.grid} />
-          <XAxis dataKey="name" tick={{ fontSize: 11, fill: c.ink3 }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fontSize: 11, fill: c.ink3 }} axisLine={false} tickLine={false} width={44} tickFormatter={(v: number) => formatMoneyCompact(Math.round(v * 100), currencyCode, locale)} />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.grid} opacity={0.6} />
+          <XAxis dataKey="name" tick={tick} axisLine={false} tickLine={false} />
+          <YAxis tick={tick} axisLine={false} tickLine={false} width={44} tickFormatter={(v: number) => formatMoneyCompact(Math.round(v * 100), currencyCode, locale)} />
           <Tooltip
-            cursor={{ fill: c.grid, opacity: 0.4 }}
+            cursor={{ fill: c.grid, opacity: 0.35 }}
             formatter={(value, name) => [
               formatMoney(Math.round(Number(value) * 100), currencyCode, locale),
               String(name) === 'in' ? t('money.in', locale) : t('money.out', locale),
             ]}
           />
-          <Bar dataKey="in" fill={c.in} radius={[6, 6, 0, 0]} maxBarSize={28} />
-          <Bar dataKey="out" fill={c.out} radius={[6, 6, 0, 0]} maxBarSize={28} />
+          <Bar dataKey="in" fill={c.in} radius={[6, 6, 0, 0]} maxBarSize={28} isAnimationActive animationDuration={550} animationEasing="ease-out">
+            {data.map((row) => (
+              <Cell key={`in-${row.ym}`} fill={selectedYm && row.ym !== selectedYm ? `${c.in}88` : c.in} />
+            ))}
+          </Bar>
+          <Bar dataKey="out" fill={c.out} radius={[6, 6, 0, 0]} maxBarSize={28} isAnimationActive animationDuration={550} animationEasing="ease-out">
+            {data.map((row) => (
+              <Cell key={`out-${row.ym}`} fill={selectedYm && row.ym !== selectedYm ? `${c.out}88` : c.out} />
+            ))}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -75,10 +91,10 @@ export function NetLine({ series, currencyCode, locale, height = 180 }: Common &
       <ResponsiveContainer>
         <LineChart data={data} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={c.grid} />
-          <XAxis dataKey="name" tick={{ fontSize: 11, fill: c.ink3 }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fontSize: 11, fill: c.ink3 }} axisLine={false} tickLine={false} width={44} tickFormatter={(v: number) => formatMoneyCompact(Math.round(v * 100), currencyCode, locale)} />
+          <XAxis dataKey="name" tick={{ fontSize: 13, fill: c.ink3 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fontSize: 13, fill: c.ink3 }} axisLine={false} tickLine={false} width={44} tickFormatter={(v: number) => formatMoneyCompact(Math.round(v * 100), currencyCode, locale)} />
           <Tooltip formatter={(value) => [formatMoney(Math.round(Number(value) * 100), currencyCode, locale), t('money.left', locale)]} />
-          <Line type="monotone" dataKey="net" stroke={c.accent} strokeWidth={3} dot={{ r: 3, fill: c.accent }} activeDot={{ r: 5 }} />
+          <Line type="monotone" dataKey="net" stroke={c.accent} strokeWidth={3} dot={{ r: 3, fill: c.accent }} activeDot={{ r: 5 }} isAnimationActive animationDuration={600} />
         </LineChart>
       </ResponsiveContainer>
     </div>
