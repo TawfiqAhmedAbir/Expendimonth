@@ -15,6 +15,7 @@ import {
   cashBalanceThrough,
   closedMonthStreak,
   compareNetToPreviousMonth,
+  currentYearMonth,
   defaultOccurredOn,
   formatMoney,
   formatYearMonthLabel,
@@ -35,7 +36,6 @@ import { useCountUp } from '../design-kit/motion'
 import { ScreenShell } from '../design-kit/ScreenShell'
 import { useMonthLineActions } from '../hooks/useMonthLineActions'
 import { useMonthStart } from '../hooks/useMonthStart'
-import { useWorkingYearMonth } from '../hooks/useWorkingYearMonth'
 import { t } from '../i18n'
 import { touchCategory } from '../storage/categories'
 import { useActiveProperty, useAppData } from '../storage/AppDataContext'
@@ -62,7 +62,7 @@ export function HomePage() {
   const { showToast } = useToast()
   const locale = settings.locale
   const currency = property.currencyCode
-  const [ym, setWorkingYm] = useWorkingYearMonth(property.id)
+  const [ym, setYm] = useState(currentYearMonth)
   const month = monthsByYearMonth.get(ym)
   const [pad, setPad] = useState<'in' | 'out' | null>(null)
   const [counting, setCounting] = useState(false)
@@ -189,7 +189,7 @@ export function HomePage() {
   }
 
   function stepWorkingMonth(next: string) {
-    setWorkingYm(next)
+    setYm(next)
     void getOrCreateMonth(property.id, next).then(() => refresh())
   }
 
@@ -307,7 +307,6 @@ export function HomePage() {
         yearMonth={ym}
         locale={locale}
         compact
-        minYearMonth={property.openingAsOf}
         onChange={stepWorkingMonth}
       />
 

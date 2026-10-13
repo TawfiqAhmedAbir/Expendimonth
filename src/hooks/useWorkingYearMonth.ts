@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { getWorkingYearMonthFromSettings } from '../storage/workingMonth'
+import { loadSettings } from '../storage/settings'
 import { useAppData } from '../storage/AppDataContext'
 
 export function useWorkingYearMonth(propertyId: string): [string, (ym: string) => void] {
@@ -8,11 +9,13 @@ export function useWorkingYearMonth(propertyId: string): [string, (ym: string) =
 
   const setYm = useCallback(
     (next: string) => {
+      const current = loadSettings()
+      if (current.workingMonthByProperty[propertyId] === next) return
       updateSettings({
-        workingMonthByProperty: { ...settings.workingMonthByProperty, [propertyId]: next },
+        workingMonthByProperty: { ...current.workingMonthByProperty, [propertyId]: next },
       })
     },
-    [propertyId, settings.workingMonthByProperty, updateSettings],
+    [propertyId, updateSettings],
   )
 
   return [ym, setYm]

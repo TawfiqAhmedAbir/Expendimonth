@@ -7,15 +7,13 @@ type Props = {
   yearMonth: string
   locale: string
   onChange: (yearMonth: string) => void
-  /** When set, prev is disabled at or before this month (YYYY-MM). */
-  minYearMonth?: string | null
   compact?: boolean
 }
 
-export function MonthStepper({ yearMonth, locale, onChange, minYearMonth, compact }: Props) {
+export function MonthStepper({ yearMonth, locale, onChange, compact }: Props) {
   const prev = previousYearMonth(yearMonth)
   const next = nextYearMonth(yearMonth)
-  const prevDisabled = !prev || (minYearMonth != null && prev <= minYearMonth)
+  const prevDisabled = !prev
   const nextDisabled = !next
 
   return (
