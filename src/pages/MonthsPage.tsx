@@ -6,16 +6,18 @@ import { getCategoryLabel } from '../domain/categories'
 import {
   currentYearMonth,
   formatMoney,
+  formatOccurredOn,
   formatYearMonthLabel,
   monthlySeries,
   net,
+  parseMoneyToCents,
   reconcileMismatch,
   totalIn,
   totalOut,
   yearMonthsBack,
   yearOf,
 } from '../domain/calc'
-import type { LineItem, MonthRecord } from '../domain/types'
+import type { LineItem, MonthRecord, UserCategory } from '../domain/types'
 import { Badge, Chip } from '../design-kit/Primitives'
 import { ScreenShell } from '../design-kit/ScreenShell'
 import { t } from '../i18n'
@@ -23,6 +25,16 @@ import { useActiveProperty, useAppData } from '../storage/AppDataContext'
 import { getOrCreateMonth } from '../storage/repository'
 
 type Filter = 'all' | 'done' | 'mismatch' | 'empty'
+
+function lineMatches(line: LineItem, query: string, categories: UserCategory[]): boolean {
+  const label = getCategoryLabel(line.categoryId, categories).toLowerCase()
+  if (label.includes(query) || line.note.toLowerCase().includes(query) || (line.occurredOn ?? '').includes(query)) return true
+  const money = query.replace(/,/g, '.').replace(/[^\d.]/g, '')
+  if (!money) return false
+  if ((line.amountCents / 100).toFixed(2).includes(money)) return true
+  const parsed = parseMoneyToCents(money)
+  return parsed !== null && parsed === line.amountCents
+}
 
 export function MonthsPage() {
   const property = useActiveProperty()
@@ -42,8 +54,7 @@ export function MonthsPage() {
   }, [last12, monthsByYearMonth, property.id, refresh])
 
   const q = query.trim().toLowerCase()
-  const matchesQuery = (lines: LineItem[]) =>
-    !q || lines.some((l) => getCategoryLabel(l.categoryId, categories).toLowerCase().includes(q) || l.note.toLowerCase().includes(q))
+  const matchesQuery = (lines: LineItem[]) => !q || lines.some((l) => lineMatches(l, q, categories))
 
   const visible = useMemo(() => {
     const sorted = [...months].sort((a, b) => b.yearMonth.localeCompare(a.yearMonth))
@@ -131,6 +142,17 @@ export function MonthsPage() {
                       <div className="mcard__bar-in" style={{ width: `${(i / total) * 100}%` }} />
                       <div className="mcard__bar-out" style={{ width: `${(o / total) * 100}%` }} />
                     </div>
+                    {q ? (
+                      <div className="stack" style={{ marginTop: 'var(--s-3)' }}>
+                        {lines.filter((l) => lineMatches(l, q, categories)).map((l) => (
+                          <div key={l.id} className="caption">
+                            {l.occurredOn ? `${formatOccurredOn(l.occurredOn, locale)} · ` : ''}
+                            {getCategoryLabel(l.categoryId, categories)}
+                            {l.note ? ` · ${l.note}` : ''} · {formatMoney(l.amountCents, currency, locale)}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </Link>
                 )
               })}

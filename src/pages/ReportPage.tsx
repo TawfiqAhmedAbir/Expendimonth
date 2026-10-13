@@ -2,7 +2,7 @@ import { ArrowLeft, Printer } from 'lucide-react'
 import { useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { getCategoryLabel } from '../domain/categories'
-import { formatMoney, formatYearMonthLabel, monthlySeries, net, totalIn, totalOut, yearMonthsBack, yearSummary } from '../domain/calc'
+import { formatMoney, formatOccurredOn, formatYearMonthLabel, monthlySeries, net, totalIn, totalOut, yearMonthsBack, yearSummary } from '../domain/calc'
 import { propertyTypeLabel } from '../domain/propertyTypes'
 import { Button, LinkButton } from '../design-kit/Primitives'
 import { ScreenShell } from '../design-kit/ScreenShell'
@@ -52,7 +52,8 @@ export function ReportPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 'var(--s-4)', fontSize: '1rem' }}>
             <thead>
               <tr style={{ textAlign: 'left', color: 'var(--ink-3)' }}>
-                <th style={{ padding: '6px 0' }}>{t('pad.whatIsThis', locale)}</th>
+                <th style={{ padding: '6px 0' }}>{t('pad.day', locale)}</th>
+                <th>{t('pad.whatIsThis', locale)}</th>
                 <th>{t('pad.note', locale)}</th>
                 <th style={{ textAlign: 'right' }}>{t('pad.save', locale) === 'Save' ? 'Amount' : ''}</th>
               </tr>
@@ -60,7 +61,8 @@ export function ReportPage() {
             <tbody>
               {lines.map((l) => (
                 <tr key={l.id} style={{ borderTop: '1px solid var(--border)' }}>
-                  <td style={{ padding: '8px 0' }}>{getCategoryLabel(l.categoryId, categories)}</td>
+                  <td style={{ padding: '8px 0' }}>{l.occurredOn ? formatOccurredOn(l.occurredOn, locale) : ''}</td>
+                  <td>{getCategoryLabel(l.categoryId, categories)}</td>
                   <td className="caption">{l.note}</td>
                   <td className={`money money--${l.type}`} style={{ textAlign: 'right' }}>{l.type === 'out' ? '−' : '+'}{formatMoney(l.amountCents, currency, locale)}</td>
                 </tr>

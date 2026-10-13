@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  biggestCategoryChange,
+  cashBalanceThrough,
   categoryBreakdown,
+  clampDateToMonth,
   compareNetToPreviousMonth,
+  defaultOccurredOn,
   deriveMonthStatus,
   evaluateAmountExpression,
   monthlySeries,
   net,
+  occurredOnFromCreatedAt,
   previousYearMonth,
   reconcileMismatch,
   runningBalanceThrough,
@@ -25,6 +30,7 @@ const lines = (items: Partial<LineItem>[], monthId = 'm1'): LineItem[] =>
     amountCents: 0,
     categoryId: 'c',
     note: '',
+    occurredOn: '2026-01-01',
     createdAt: i,
     ...item,
   }))
@@ -59,6 +65,17 @@ describe('totals', () => {
     expect(runningBalanceThrough(['2026-01', '2026-02'], map, 1000, '2026-01')).toBe(11000)
     expect(runningBalanceThrough(['2026-01', '2026-02'], map, 1000, '2026-02')).toBe(7000)
   })
+
+  it('cash balance includes opening and stops at the chosen month', () => {
+    const months = [month('2026-01'), month('2026-02'), month('2026-03')]
+    const byId = new Map<string, LineItem[]>([
+      ['p:2026-01', lines([{ type: 'in', amountCents: 10000 }], 'p:2026-01')],
+      ['p:2026-02', lines([{ type: 'out', amountCents: 4000 }], 'p:2026-02')],
+      ['p:2026-03', lines([{ type: 'in', amountCents: 50000 }], 'p:2026-03')],
+    ])
+    expect(cashBalanceThrough(months, byId, 1000, '2026-02')).toBe(7000)
+    expect(cashBalanceThrough([], byId, 2500, '2026-02')).toBe(2500)
+  })
 })
 
 describe('dates', () => {
@@ -70,6 +87,21 @@ describe('dates', () => {
 
   it('yearMonthsBack returns ascending list ending at from', () => {
     expect(yearMonthsBack('2026-02', 3)).toEqual(['2025-12', '2026-01', '2026-02'])
+  })
+
+  it('clamps a day into the target month', () => {
+    expect(clampDateToMonth('2026-01-31', '2026-02')).toBe('2026-02-28')
+    expect(clampDateToMonth('2026-03-15', '2026-03')).toBe('2026-03-15')
+  })
+
+  it('defaults to today inside the month, else the edge', () => {
+    expect(defaultOccurredOn('2026-10', new Date(2026, 9, 13))).toBe('2026-10-13')
+    expect(defaultOccurredOn('2026-09', new Date(2026, 9, 13))).toBe('2026-09-30')
+    expect(defaultOccurredOn('2026-11', new Date(2026, 9, 13))).toBe('2026-11-01')
+  })
+
+  it('backfills a day from when the line was typed', () => {
+    expect(occurredOnFromCreatedAt(new Date(2026, 9, 31).getTime(), '2026-09')).toBe('2026-09-30')
   })
 })
 
@@ -84,6 +116,19 @@ describe('status and compare', () => {
     const r = compareNetToPreviousMonth(5000, 3000)
     expect(r?.deltaCents).toBe(2000)
     expect(r?.better).toBe(true)
+  })
+
+  it('names the largest category change', () => {
+    const current = lines([
+      { type: 'out', amountCents: 8000, categoryId: 'roof' },
+      { type: 'in', amountCents: 1000, categoryId: 'rent' },
+    ])
+    const previous = lines([
+      { type: 'out', amountCents: 3000, categoryId: 'roof' },
+      { type: 'in', amountCents: 1000, categoryId: 'rent' },
+    ])
+    expect(biggestCategoryChange(current, previous)).toEqual({ categoryId: 'roof', type: 'out', deltaCents: 5000 })
+    expect(biggestCategoryChange(current, [])).toBeNull()
   })
 
   it('flags reconcile mismatch', () => {

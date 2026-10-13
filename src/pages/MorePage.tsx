@@ -1,14 +1,16 @@
-import { Building2, ChevronRight, Download, KeyRound, Moon, Printer, ShieldCheck, Sun, Tags } from 'lucide-react'
+import { Building2, ChevronRight, Download, KeyRound, Moon, Printer, ShieldCheck, Sun, Tags, Upload } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PinPad } from '../components/PinPad'
 import { useToast } from '../components/Toast'
 import { currentYearMonth } from '../domain/calc'
+import type { BackupPayload } from '../domain/types'
 import { Button, Card, Sheet } from '../design-kit/Primitives'
 import { ScreenShell } from '../design-kit/ScreenShell'
 import { t } from '../i18n'
 import { hashPin, makeSalt, markUnlocked } from '../security/pin'
 import { useAppData } from '../storage/AppDataContext'
+import { parseBackup } from '../storage/repository'
 
 const NINETY_DAYS = 90 * 86_400_000
 
@@ -42,12 +44,13 @@ function RowLink({ to, icon, label, hint }: { to: string; icon: React.ReactNode;
 }
 
 export function MorePage() {
-  const { settings, updateSettings, exportBackup, properties, categories } = useAppData()
+  const { settings, updateSettings, exportBackup, restoreBackup, properties, categories } = useAppData()
   const { showToast } = useToast()
   const locale = settings.locale
   const [pinStep, setPinStep] = useState<'idle' | 'set' | 'confirm'>('idle')
   const [firstPin, setFirstPin] = useState('')
   const [pinError, setPinError] = useState<string | null>(null)
+  const [pendingBackup, setPendingBackup] = useState<BackupPayload | null>(null)
   const hasPin = Boolean(settings.pinHash)
 
   async function onPin(p: string) {
@@ -121,6 +124,32 @@ export function MorePage() {
           </span>
           <Button size="sm" variant="primary" onClick={() => void exportBackup()}>{t('common.save', locale)}</Button>
         </div>
+        <div className="line">
+          <span className="line__icon"><Upload size={20} /></span>
+          <span className="grow line__title">{t('more.restore', locale)}</span>
+          <label className="btn btn--ghost btn--sm">
+            {t('more.restorePick', locale)}
+            <input
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (!file) return
+                void file.text().then((text) => {
+                  try {
+                    const parsed = parseBackup(JSON.parse(text))
+                    if (!parsed) showToast({ message: t('more.restoreBad', locale) })
+                    else setPendingBackup(parsed)
+                  } catch {
+                    showToast({ message: t('more.restoreBad', locale) })
+                  }
+                })
+              }}
+            />
+          </label>
+        </div>
         <RowLink to={`/report/month/${currentYearMonth()}`} icon={<Printer size={20} />} label={t('more.printMonth', locale)} />
         <div className="line">
           <span className="line__icon"><ShieldCheck size={20} /></span>
@@ -129,6 +158,27 @@ export function MorePage() {
       </Card>
 
       <p className="caption" style={{ marginTop: 'var(--s-6)' }}>{t('more.about', locale)}</p>
+
+      <Sheet open={Boolean(pendingBackup)} onClose={() => setPendingBackup(null)} title={t('more.restore', locale)}>
+        <p className="sub">{t('more.restoreConfirm', locale)}</p>
+        <div className="row">
+          <Button className="grow" onClick={() => setPendingBackup(null)}>{t('common.cancel', locale)}</Button>
+          <Button
+            className="grow"
+            variant="danger"
+            onClick={() => {
+              const payload = pendingBackup
+              if (!payload) return
+              void restoreBackup(payload).then(() => {
+                setPendingBackup(null)
+                showToast({ message: t('more.restoreOk', locale) })
+              })
+            }}
+          >
+            {t('more.restoreAction', locale)}
+          </Button>
+        </div>
+      </Sheet>
 
       <Sheet open={pinStep !== 'idle'} onClose={() => setPinStep('idle')}>
         <PinPad title={pinStep === 'set' ? t('pin.set', locale) : t('pin.confirm', locale)} error={pinError} onComplete={(p) => void onPin(p)} />

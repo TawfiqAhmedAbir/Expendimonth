@@ -56,6 +56,8 @@ export type LineItem = {
   amountCents: number
   categoryId: string
   note: string
+  /** Calendar day the money moved, YYYY-MM-DD, inside the line's month. */
+  occurredOn: string
   createdAt: number
 }
 

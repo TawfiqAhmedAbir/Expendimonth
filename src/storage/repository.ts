@@ -5,10 +5,10 @@ import type {
   MonthRecord,
   MonthStatus,
 } from '../domain/types'
-import { deriveMonthStatus } from '../domain/calc'
+import { clampDateToMonth, deriveMonthStatus, occurredOnFromCreatedAt } from '../domain/calc'
 import { getDb, monthIdFor } from './db'
 import { listProperties } from './properties'
-import { loadSettings, patchSettings } from './settings'
+import { loadSettings, patchSettings, saveSettings } from './settings'
 
 export { loadSettings, saveSettings, patchSettings } from './settings'
 
@@ -81,10 +81,26 @@ export async function setMonthReconcile(
 
 // ---------- Lines ----------
 
+function yearMonthOf(monthId: string): string {
+  return monthId.slice(monthId.lastIndexOf(':') + 1)
+}
+
+/** Older lines have no day. Fill one from when they were typed, inside their month. */
+export function withOccurredOn(line: LineItem): LineItem {
+  const ym = yearMonthOf(line.monthId)
+  const raw = line.occurredOn
+  const occurredOn = raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? clampDateToMonth(raw, ym) : occurredOnFromCreatedAt(line.createdAt, ym)
+  return occurredOn === line.occurredOn ? line : { ...line, occurredOn }
+}
+
+function sortLines(lines: LineItem[]): LineItem[] {
+  return lines.map(withOccurredOn).sort((a, b) => a.occurredOn.localeCompare(b.occurredOn) || a.createdAt - b.createdAt)
+}
+
 export async function getLinesForMonth(monthId: string): Promise<LineItem[]> {
   const db = await getDb()
   const lines = await db.getAllFromIndex('lines', 'by-monthId', monthId)
-  return lines.sort((a, b) => a.createdAt - b.createdAt)
+  return sortLines(lines)
 }
 
 export async function addLine(
@@ -115,8 +131,10 @@ export async function addLines(
 
 export async function updateLine(line: LineItem): Promise<void> {
   const db = await getDb()
-  await db.put('lines', line)
+  const prev = await db.get('lines', line.id)
+  await db.put('lines', withOccurredOn(line))
   await refreshMonthStatus(line.monthId)
+  if (prev && prev.monthId !== line.monthId) await refreshMonthStatus(prev.monthId)
 }
 
 export async function deleteLine(lineId: string): Promise<LineItem | undefined> {
@@ -142,10 +160,7 @@ export async function getLinesGrouped(propertyId: string): Promise<Map<string, L
   await Promise.all(
     months.map(async (m) => {
       const lines = await db.getAllFromIndex('lines', 'by-monthId', m.id)
-      map.set(
-        m.id,
-        lines.sort((a, b) => a.createdAt - b.createdAt),
-      )
+      map.set(m.id, sortLines(lines))
     }),
   )
   return map
@@ -201,7 +216,44 @@ export async function buildBackup(): Promise<BackupPayload> {
     properties,
     categories,
     months,
-    lines,
+    lines: lines.map(withOccurredOn),
     attachments,
   }
+}
+
+export function parseBackup(raw: unknown): BackupPayload | null {
+  if (!raw || typeof raw !== 'object') return null
+  const p = raw as Partial<BackupPayload>
+  if (p.version !== 3) return null
+  if (!p.settings || typeof p.settings !== 'object') return null
+  if (!Array.isArray(p.properties) || !Array.isArray(p.months) || !Array.isArray(p.lines) || !Array.isArray(p.categories) || !Array.isArray(p.attachments)) return null
+  return p as BackupPayload
+}
+
+/** Replace everything on this phone with a version-3 backup file. */
+export async function restoreBackup(payload: BackupPayload): Promise<void> {
+  const db = await getDb()
+  const tx = db.transaction(['properties', 'months', 'lines', 'attachments', 'categories'], 'readwrite')
+  await Promise.all([
+    tx.objectStore('properties').clear(),
+    tx.objectStore('months').clear(),
+    tx.objectStore('lines').clear(),
+    tx.objectStore('categories').clear(),
+    tx.objectStore('attachments').clear(),
+  ])
+  const attachments: AttachmentRecord[] = payload.attachments.map((a) => {
+    const binary = atob(a.base64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    return { monthId: a.monthId, mimeType: a.mimeType, blob: new Blob([bytes], { type: a.mimeType }), updatedAt: Date.now() }
+  })
+  await Promise.all([
+    ...payload.properties.map((p) => tx.objectStore('properties').put(p)),
+    ...payload.months.map((m) => tx.objectStore('months').put(m)),
+    ...payload.lines.map((l) => tx.objectStore('lines').put(withOccurredOn(l))),
+    ...payload.categories.map((c) => tx.objectStore('categories').put(c)),
+    ...attachments.map((a) => tx.objectStore('attachments').put(a)),
+  ])
+  await tx.done
+  saveSettings(payload.settings)
 }

@@ -10,6 +10,8 @@ import { useToast } from '../components/Toast'
 import { InOutBars } from '../components/charts'
 import { CategoryEditSheet } from './CategoriesPage'
 import {
+  cashBalanceThrough,
+  clampDateToMonth,
   formatMoney,
   formatYearMonthLabel,
   net,
@@ -65,14 +67,23 @@ export function MonthPage() {
   const readOnly = month.status === 'done'
   const isEmpty = lines.length === 0
   const mismatch = reconcileMismatch(month, lines)
+  const haveNow = cashBalanceThrough([...monthsByYearMonth.values()], linesByMonthId, property.openingBalanceCents, yearMonth)
 
   async function save(data: AmountPadResult) {
     let categoryId = data.categoryId ?? pad?.edit?.categoryId
     if (data.newCategoryLabel) categoryId = (await createCategory(property.id, data.newCategoryLabel)).id
     if (!categoryId) return
+    const targetYm = data.moveToYearMonth && data.moveToYearMonth !== yearMonth ? data.moveToYearMonth : yearMonth
+    if (targetYm !== yearMonth && monthsByYearMonth.get(targetYm)?.status === 'done') {
+      showToast({ message: t('line.moveClosed', locale) })
+      return
+    }
     await touchCategory(categoryId, data.amountCents)
-    const payload = { type: data.type, amountCents: data.amountCents, categoryId, note: data.note }
-    if (pad?.edit) await updateLine({ ...pad.edit, ...payload })
+    const payload = { type: data.type, amountCents: data.amountCents, categoryId, note: data.note, occurredOn: clampDateToMonth(data.occurredOn, targetYm) }
+    if (pad?.edit && targetYm !== yearMonth) {
+      const dest = await getOrCreateMonth(property.id, targetYm)
+      await updateLine({ ...pad.edit, ...payload, monthId: dest.id })
+    } else if (pad?.edit) await updateLine({ ...pad.edit, ...payload })
     else await addLine(month!.id, payload)
     if (month!.status === 'checked') await setMonthStatus(month!.id, 'open')
     await refresh()
@@ -102,7 +113,14 @@ export function MonthPage() {
         </Badge>
       </div>
 
-      {readOnly ? <div className="insight" style={{ marginBottom: 'var(--s-4)' }}>{t('month.lockedHint', locale)}</div> : null}
+      {readOnly ? (
+        <div className="insight" style={{ marginBottom: 'var(--s-4)' }}>
+          <p style={{ margin: '0 0 var(--s-3)' }}>{t('month.lockedHint', locale)}</p>
+          <Button block onClick={() => { void setMonthStatus(month.id, 'open').then(() => refresh()) }}>
+            <LockOpen size={18} /> {t('month.reopen', locale)}
+          </Button>
+        </div>
+      ) : null}
 
       {isEmpty ? (
         <Card variant="flat">
@@ -134,6 +152,13 @@ export function MonthPage() {
         </Button>
       ) : null}
 
+      <Card variant="flat" style={{ marginBottom: 'var(--s-4)' }}>
+        <div className="row row--between">
+          <span>{t('money.haveNow', locale)}</span>
+          <strong className="money">{formatMoney(haveNow, currency, locale)}</strong>
+        </div>
+      </Card>
+
       {!isEmpty ? (
         <Card>
           <h2 className="section" style={{ marginTop: 0 }}>{t('month.lines', locale)}</h2>
@@ -164,6 +189,8 @@ export function MonthPage() {
         currencyCode={currency}
         locale={locale}
         categories={categories}
+        yearMonth={yearMonth}
+        isMonthClosed={(ym) => monthsByYearMonth.get(ym)?.status === 'done'}
         initial={pad?.edit ?? null}
         onClose={() => setPad(null)}
         onSave={(d) => void save(d)}
@@ -182,7 +209,7 @@ export function MonthPage() {
           locale={locale}
           onClose={() => setChecklist(false)}
           onAdd={async (items) => {
-            await addLines(month.id, items)
+            await addLines(month.id, items.map((it) => ({ ...it, occurredOn: clampDateToMonth(it.occurredOn, yearMonth) })))
             for (const it of items) await touchCategory(it.categoryId, it.amountCents)
             await refresh()
           }}

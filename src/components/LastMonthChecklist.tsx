@@ -73,6 +73,7 @@ export function LastMonthChecklist({ open, previousYearMonth, previousLines, cat
               amountCents: parseMoneyToCents(r.amount) ?? 0,
               categoryId: r.line.categoryId,
               note: r.line.note,
+              occurredOn: r.line.occurredOn,
             })),
           )
           onClose()

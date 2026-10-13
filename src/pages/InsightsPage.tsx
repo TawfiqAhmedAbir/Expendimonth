@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Donut, DONUT_COLORS, InOutBars, NetLine } from '../components/charts'
 import { getCategoryLabel } from '../domain/categories'
 import {
+  biggestCategoryChange,
   categoryBreakdown,
   compareNetToPreviousMonth,
   currentYearMonth,
@@ -15,11 +16,18 @@ import {
   yearMonthsBack,
   yearOf,
   yearSummary,
+  type CategoryChange,
 } from '../domain/calc'
 import { Card, Chip, LinkButton } from '../design-kit/Primitives'
 import { ScreenShell } from '../design-kit/ScreenShell'
 import { t } from '../i18n'
 import { useActiveProperty, useAppData } from '../storage/AppDataContext'
+
+function categoryTone(change: CategoryChange): string {
+  const up = change.deltaCents > 0
+  const better = change.type === 'in' ? up : !up
+  return better ? 'insight--positive' : 'insight--negative'
+}
 
 export function InsightsPage() {
   const property = useActiveProperty()
@@ -56,6 +64,12 @@ export function InsightsPage() {
   }, [selected, monthsByYearMonth, linesByMonthId, selNet])
 
   const breakdown = useMemo(() => categoryBreakdown(selLines, donutType), [selLines, donutType])
+  const categoryMove = useMemo(() => {
+    const p = previousYearMonth(selected)
+    const pm = p ? monthsByYearMonth.get(p) : undefined
+    const pl = pm ? (linesByMonthId.get(pm.id) ?? []) : []
+    return biggestCategoryChange(selLines, pl)
+  }, [selected, monthsByYearMonth, linesByMonthId, selLines])
   const year = yearOf(selected)
   const ySummary = useMemo(() => yearSummary(year, monthlySeries(yearMonthsBack(`${year}-12`, 12), monthsByYearMonth, linesByMonthId)), [year, monthsByYearMonth, linesByMonthId])
 
@@ -94,6 +108,14 @@ export function InsightsPage() {
               <div className="totals__row"><span>{t('insights.vsLast', locale)}</span>{delta(vsLast)}</div>
               <div className="totals__row"><span>{t('insights.vsLastYear', locale, { month: formatMonthShort(selected, locale) })}</span>{delta(vsLastYear)}</div>
             </div>
+            {categoryMove ? (
+              <div className={`insight ${categoryTone(categoryMove)}`} style={{ marginTop: 'var(--s-3)' }}>
+                {t(categoryMove.deltaCents > 0 ? 'home.categoryUp' : 'home.categoryDown', locale, {
+                  category: getCategoryLabel(categoryMove.categoryId, categories),
+                  amount: formatMoney(Math.abs(categoryMove.deltaCents), currency, locale),
+                })}
+              </div>
+            ) : null}
             <div className="row" style={{ marginTop: 'var(--s-3)' }}>
               <LinkButton to={`/month/${selected}`} variant="ghost" className="grow">{t('home.openMonth', locale)}</LinkButton>
             </div>

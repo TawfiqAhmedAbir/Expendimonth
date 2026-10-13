@@ -7,10 +7,10 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { LineItem, MonthRecord, Property, Settings, UserCategory } from '../domain/types'
+import type { BackupPayload, LineItem, MonthRecord, Property, Settings, UserCategory } from '../domain/types'
 import { listCategories } from './categories'
 import { listProperties } from './properties'
-import { buildBackup, getLinesGrouped, listMonths } from './repository'
+import { buildBackup, getLinesGrouped, listMonths, restoreBackup as writeBackup } from './repository'
 import { loadSettings, saveSettings } from './settings'
 
 type AppDataContextValue = {
@@ -26,6 +26,7 @@ type AppDataContextValue = {
   updateSettings: (patch: Partial<Settings>) => void
   setActiveProperty: (id: string) => void
   exportBackup: () => Promise<void>
+  restoreBackup: (payload: BackupPayload) => Promise<void>
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null)
@@ -101,6 +102,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setSettings(loadSettings())
   }, [])
 
+  const restoreBackup = useCallback(async (payload: BackupPayload) => {
+    await writeBackup(payload)
+    await refresh()
+  }, [refresh])
+
   const activeProperty = useMemo(
     () => properties.find((p) => p.id === settings.activePropertyId) ?? null,
     [properties, settings.activePropertyId],
@@ -126,6 +132,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateSettings,
       setActiveProperty,
       exportBackup,
+      restoreBackup,
     }),
     [
       ready,
@@ -140,6 +147,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateSettings,
       setActiveProperty,
       exportBackup,
+      restoreBackup,
     ],
   )
 

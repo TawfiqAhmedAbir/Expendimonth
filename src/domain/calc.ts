@@ -1,4 +1,4 @@
-import type { LineItem, MonthRecord, MonthStatus } from './types'
+import type { LineItem, LineType, MonthRecord, MonthStatus } from './types'
 
 export function totalIn(lines: LineItem[]): number {
   return lines.filter((l) => l.type === 'in').reduce((s, l) => s + l.amountCents, 0)
@@ -35,6 +35,98 @@ export function runningBalanceThrough(
     if (ym === throughYearMonth) break
   }
   return balance
+}
+
+/** Opening balance plus every month's net up to and including throughYearMonth. */
+export function cashBalanceThrough(
+  months: MonthRecord[],
+  linesByMonthId: Map<string, LineItem[]>,
+  openingBalanceCents: number,
+  throughYearMonth: string,
+): number {
+  const sorted = months.map((m) => m.yearMonth).filter((ym) => ym <= throughYearMonth).sort()
+  const byYm = new Map<string, LineItem[]>()
+  for (const m of months) {
+    if (m.yearMonth <= throughYearMonth) byYm.set(m.yearMonth, linesByMonthId.get(m.id) ?? [])
+  }
+  return runningBalanceThrough(sorted, byYm, openingBalanceCents, throughYearMonth)
+}
+
+export function daysInMonth(yearMonth: string): number {
+  const [y, m] = yearMonth.split('-').map(Number)
+  if (!y || !m) return 31
+  return new Date(y, m, 0).getDate()
+}
+
+export function monthDateBounds(yearMonth: string): { min: string; max: string } {
+  const last = daysInMonth(yearMonth)
+  return { min: `${yearMonth}-01`, max: `${yearMonth}-${String(last).padStart(2, '0')}` }
+}
+
+function isoFromDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** Keep the day-of-month, limited to a real day in yearMonth. */
+export function clampDateToMonth(isoDate: string, yearMonth: string): string {
+  const { min, max } = monthDateBounds(yearMonth)
+  if (isoDate >= min && isoDate <= max && isoDate.startsWith(`${yearMonth}-`)) return isoDate
+  const day = Number(isoDate.slice(8, 10))
+  const last = Number(max.slice(8, 10))
+  const d = Number.isFinite(day) && day > 0 ? Math.min(day, last) : 1
+  return `${yearMonth}-${String(d).padStart(2, '0')}`
+}
+
+/** Today when it falls in the month, otherwise the last day of a past month or the first of a future one. */
+export function defaultOccurredOn(yearMonth: string, now = new Date()): string {
+  const today = isoFromDate(now)
+  const { min, max } = monthDateBounds(yearMonth)
+  if (today < min) return min
+  if (today > max) return max
+  return today
+}
+
+export function occurredOnFromCreatedAt(createdAt: number, yearMonth: string): string {
+  return clampDateToMonth(isoFromDate(new Date(createdAt)), yearMonth)
+}
+
+export function formatOccurredOn(isoDate: string, locale = 'en'): string {
+  const [y, m, d] = isoDate.split('-').map(Number)
+  if (!y || !m || !d) return isoDate
+  return new Date(y, m - 1, d).toLocaleDateString(locale, { month: 'short', day: 'numeric' })
+}
+
+export type CategoryChange = {
+  categoryId: string
+  type: LineType
+  deltaCents: number
+}
+
+/** Largest category total change versus the previous month. Null when there is nothing to compare. */
+export function biggestCategoryChange(current: LineItem[], previous: LineItem[]): CategoryChange | null {
+  if (previous.length === 0) return null
+  const totals = (list: LineItem[]) => {
+    const map = new Map<string, { type: LineType; categoryId: string; cents: number }>()
+    for (const l of list) {
+      const key = `${l.type}:${l.categoryId}`
+      const prev = map.get(key)
+      if (prev) prev.cents += l.amountCents
+      else map.set(key, { type: l.type, categoryId: l.categoryId, cents: l.amountCents })
+    }
+    return map
+  }
+  const a = totals(current)
+  const b = totals(previous)
+  let best: CategoryChange | null = null
+  for (const key of new Set([...a.keys(), ...b.keys()])) {
+    const delta = (a.get(key)?.cents ?? 0) - (b.get(key)?.cents ?? 0)
+    if (delta === 0) continue
+    const src = a.get(key) ?? b.get(key)!
+    if (!best || Math.abs(delta) > Math.abs(best.deltaCents)) {
+      best = { categoryId: src.categoryId, type: src.type, deltaCents: delta }
+    }
+  }
+  return best
 }
 
 export function shiftYearMonth(yearMonth: string, deltaMonths: number): string | null {

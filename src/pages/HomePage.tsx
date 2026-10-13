@@ -3,6 +3,8 @@ import { useEffect, useMemo } from 'react'
 import { HeroTotals } from '../components/HeroTotals'
 import { getCategoryLabel } from '../domain/categories'
 import {
+  biggestCategoryChange,
+  cashBalanceThrough,
   compareNetToPreviousMonth,
   currentYearMonth,
   formatMoney,
@@ -11,6 +13,7 @@ import {
   previousYearMonth,
   totalIn,
   totalOut,
+  type CategoryChange,
 } from '../domain/calc'
 import { Badge, Button, Card, LinkButton, StatRing, Tile } from '../design-kit/Primitives'
 import { useCountUp } from '../design-kit/motion'
@@ -18,6 +21,12 @@ import { ScreenShell } from '../design-kit/ScreenShell'
 import { t } from '../i18n'
 import { useActiveProperty, useAppData } from '../storage/AppDataContext'
 import { getOrCreateMonth } from '../storage/repository'
+
+function categoryTone(change: CategoryChange): string {
+  const up = change.deltaCents > 0
+  const better = change.type === 'in' ? up : !up
+  return better ? 'insight--positive' : 'insight--negative'
+}
 
 function relativeDay(ts: number, locale: string): string {
   const days = Math.floor((Date.now() - ts) / 86_400_000)
@@ -62,6 +71,14 @@ export function HomePage() {
   }, [lines])
 
   const status = month?.status ?? 'empty'
+  const haveNow = cashBalanceThrough([...monthsByYearMonth.values()], linesByMonthId, property.openingBalanceCents, ym)
+
+  const categoryMove = useMemo(() => {
+    const prevYm = previousYearMonth(ym)
+    const prev = prevYm ? monthsByYearMonth.get(prevYm) : undefined
+    if (!prev) return null
+    return biggestCategoryChange(lines, linesByMonthId.get(prev.id) ?? [])
+  }, [ym, monthsByYearMonth, linesByMonthId, lines])
 
   return (
     <ScreenShell showSwitcher>
@@ -84,11 +101,25 @@ export function HomePage() {
           </StatRing>
         </div>
         <HeroTotals lines={lines} currencyCode={currency} locale={locale} showNet={false} />
+        <div className="totals" style={{ marginTop: 'var(--s-3)' }}>
+          <div className="totals__row" style={{ fontWeight: 800 }}>
+            <span>{t('money.haveNow', locale)}</span>
+            <span className="money">{formatMoney(haveNow, currency, locale)}</span>
+          </div>
+        </div>
         {insight ? (
           <div className={`insight ${insight.better ? 'insight--positive' : 'insight--negative'}`} style={{ marginTop: 'var(--s-4)' }}>
             {t('home.vsLast', locale, {
               amount: formatMoney(Math.abs(insight.deltaCents), currency, locale),
               direction: insight.better ? t('home.better', locale) : t('home.worse', locale),
+            })}
+          </div>
+        ) : null}
+        {categoryMove ? (
+          <div className={`insight ${categoryTone(categoryMove)}`} style={{ marginTop: 'var(--s-3)' }}>
+            {t(categoryMove.deltaCents > 0 ? 'home.categoryUp' : 'home.categoryDown', locale, {
+              category: getCategoryLabel(categoryMove.categoryId, categories),
+              amount: formatMoney(Math.abs(categoryMove.deltaCents), currency, locale),
             })}
           </div>
         ) : null}

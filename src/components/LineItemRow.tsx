@@ -1,5 +1,5 @@
 import { ChevronRight } from 'lucide-react'
-import { formatMoney } from '../domain/calc'
+import { formatMoney, formatOccurredOn } from '../domain/calc'
 import { getCategoryLabel } from '../domain/categories'
 import type { LineItem, UserCategory } from '../domain/types'
 import { t } from '../i18n'
@@ -28,7 +28,7 @@ export function LineItemRow({ line, categories, currencyCode, locale, onEdit, re
       </div>
       <div className="grow">
         <div className="line__title">{label}</div>
-        {line.note ? <div className="line__note">{line.note}</div> : null}
+        <div className="line__note">{line.occurredOn ? formatOccurredOn(line.occurredOn, locale) : ''}{line.note ? `${line.occurredOn ? ' · ' : ''}${line.note}` : ''}</div>
       </div>
       <div className={`line__amount money money--${line.type}`}>{amount}</div>
       {canEdit ? <ChevronRight size={18} className="line__chev" aria-hidden /> : null}

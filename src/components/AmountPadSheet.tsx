@@ -1,6 +1,6 @@
 import { Delete, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { centsToInput, evaluateAmountExpression, formatMoney } from '../domain/calc'
+import { centsToInput, clampDateToMonth, defaultOccurredOn, evaluateAmountExpression, formatMoney, monthDateBounds } from '../domain/calc'
 import type { LineItem, LineType, UserCategory } from '../domain/types'
 import { Button, Chip, Sheet } from '../design-kit/Primitives'
 import { haptic } from '../design-kit/motion'
@@ -13,6 +13,8 @@ export type AmountPadResult = {
   categoryId?: string
   newCategoryLabel?: string
   note: string
+  occurredOn: string
+  moveToYearMonth?: string
 }
 
 type Props = {
@@ -21,6 +23,8 @@ type Props = {
   currencyCode: string
   locale: string
   categories: UserCategory[]
+  yearMonth: string
+  isMonthClosed?: (yearMonth: string) => boolean
   initial?: LineItem | null
   onClose: () => void
   onSave: (data: AmountPadResult) => void
@@ -31,15 +35,20 @@ type Props = {
 
 const KEYS = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '0', '.'] as const
 
-export function AmountPadSheet({ open, type, currencyCode, locale, categories, initial, onClose, onSave, onLongPressCategory, onDelete }: Props) {
+export function AmountPadSheet({ open, type, currencyCode, locale, categories, yearMonth, isMonthClosed, initial, onClose, onSave, onLongPressCategory, onDelete }: Props) {
   const [expr, setExpr] = useState('')
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [creatingNew, setCreatingNew] = useState(false)
   const [newLabel, setNewLabel] = useState('')
   const [note, setNote] = useState('')
+  const [occurredOn, setOccurredOn] = useState('')
+  const [moveTo, setMoveTo] = useState(yearMonth)
 
   useEffect(() => {
     if (!open) return
+    const day = initial?.occurredOn ? clampDateToMonth(initial.occurredOn, yearMonth) : defaultOccurredOn(yearMonth)
+    setOccurredOn(day)
+    setMoveTo(yearMonth)
     if (initial) {
       setExpr(centsToInput(initial.amountCents))
       setCategoryId(initial.categoryId)
@@ -53,7 +62,7 @@ export function AmountPadSheet({ open, type, currencyCode, locale, categories, i
       setNewLabel('')
       setNote('')
     }
-  }, [open, initial, categories.length])
+  }, [open, initial, categories.length, yearMonth])
 
   if (!open) return null
 
@@ -61,7 +70,10 @@ export function AmountPadSheet({ open, type, currencyCode, locale, categories, i
   const hasChain = expr.includes('+')
   const title = initial ? t('pad.editTitle', locale) : type === 'in' ? t('pad.titleIn', locale) : t('pad.titleOut', locale)
   const needsNew = creatingNew || categories.length === 0
-  const canSave = cents !== null && cents > 0 && (needsNew ? newLabel.trim().length > 0 : Boolean(categoryId))
+  const activeYm = initial ? moveTo || yearMonth : yearMonth
+  const bounds = monthDateBounds(activeYm)
+  const targetClosed = Boolean(initial && activeYm !== yearMonth && isMonthClosed?.(activeYm))
+  const canSave = cents !== null && cents > 0 && !targetClosed && (needsNew ? newLabel.trim().length > 0 : Boolean(categoryId))
 
   function press(k: string) {
     haptic(6)
@@ -98,11 +110,9 @@ export function AmountPadSheet({ open, type, currencyCode, locale, categories, i
   function save() {
     if (!canSave || cents === null) return
     haptic(12)
-    onSave(
-      needsNew
-        ? { type, amountCents: cents, newCategoryLabel: newLabel.trim(), note: note.trim() }
-        : { type, amountCents: cents, categoryId: categoryId!, note: note.trim() },
-    )
+    const day = clampDateToMonth(occurredOn || bounds.min, activeYm)
+    const base = { type, amountCents: cents, note: note.trim(), occurredOn: day, moveToYearMonth: initial && activeYm !== yearMonth ? activeYm : undefined }
+    onSave(needsNew ? { ...base, newCategoryLabel: newLabel.trim() } : { ...base, categoryId: categoryId! })
     onClose()
   }
 
@@ -180,6 +190,38 @@ export function AmountPadSheet({ open, type, currencyCode, locale, categories, i
           />
         ) : null}
       </div>
+
+      <div className="field">
+        <label htmlFor="line-day">{t('pad.day', locale)}</label>
+        <input
+          id="line-day"
+          className="input"
+          type="date"
+          min={bounds.min}
+          max={bounds.max}
+          value={occurredOn}
+          onChange={(e) => setOccurredOn(e.target.value)}
+        />
+      </div>
+
+      {initial ? (
+        <div className="field">
+          <label htmlFor="line-move">{t('line.move', locale)}</label>
+          <input
+            id="line-move"
+            className="input"
+            type="month"
+            value={moveTo}
+            onChange={(e) => {
+              const ym = e.target.value
+              if (!/^\d{4}-\d{2}$/.test(ym)) return
+              setMoveTo(ym)
+              setOccurredOn((d) => clampDateToMonth(d || `${ym}-01`, ym))
+            }}
+          />
+          {targetClosed ? <p className="caption" style={{ color: 'var(--out)', margin: 'var(--s-2) 0 0' }}>{t('line.moveClosed', locale)}</p> : null}
+        </div>
+      ) : null}
 
       <div className="field">
         <label htmlFor="note">{t('pad.note', locale)}</label>
