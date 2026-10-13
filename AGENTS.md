@@ -2,7 +2,7 @@
 
 ## What this is
 
-Mobile-first PWA for a non-technical user (large type, plain language) to track monthly **money in**, **money out**, and **what's left** across one or more properties (house, land, vehicle, business). Charts, history timeline, paper reconciliation, photo compare, printable report, optional PIN. All data local.
+Mobile-first PWA for a non-technical user (large type, plain language) to track monthly **money in**, **money out**, and **what's left** across one or more properties (house, land, vehicle, business). Charts, history timeline, paper reconciliation, printable report, optional PIN. All data local.
 
 ## Goals
 
@@ -20,7 +20,7 @@ Mobile-first PWA for a non-technical user (large type, plain language) to track 
 ## Current focus
 
 - Design overhaul (3 phases) shipped and deployed to https://expendimonth.pages.dev
-- Next candidates: French strings (`src/i18n/fr.json`), real-device PWA install test, GitHub Actions deploy once `CLOUDFLARE_API_TOKEN` secret is added
+- Next candidates: French strings (`src/i18n/fr.json`), real-device PWA install test
 
 ## Decisions already made
 
@@ -32,7 +32,7 @@ Mobile-first PWA for a non-technical user (large type, plain language) to track 
 - User-created categories per property; no presets. Chips remember last amount; long-press to rename / pick icon
 - Amount entry via keypad sheet with `+` chaining; tap a line to edit, Delete lives inside the edit sheet (with Undo toast)
 - Month status: `empty → open → checked → done`; `CloseMonthFlow` = review → paper-says → confirm (padlock)
-- Photo compare page (`/month/:ym/compare`) with pinch-zoom and inline mismatch
+- Month photo attach and compare were removed. Paper totals stay in close-month and the report. Photos already saved stay in IndexedDB and are not shown.
 - Months timeline with filters (all/done/mismatch/empty), search, sparklines; `/year/:year` summary
 - Print-based report at `/report/:scope/:id` (always prints light)
 - PIN: SHA-256(salt:pin), session unlock, auto-lock 60s hidden
@@ -44,4 +44,4 @@ Mobile-first PWA for a non-technical user (large type, plain language) to track 
 
 - Vite 8, React 19, React Router 7, Recharts 3, idb, vite-plugin-pwa, Vitest, lucide-react, @fontsource-variable/manrope
 - GitHub `TawfiqAhmedAbir/Expendimonth` (main) → Cloudflare Pages project `expendimonth`
-- Deploy: `npm run build && npx wrangler pages deploy dist --project-name=expendimonth --branch=main --commit-dirty=true`
+- Deploy: Cloudflare Pages builds on push to `main` (`npm run build`, output `dist`). The GitHub Actions workflow was removed. Manual fallback: `npm run build && npx wrangler pages deploy dist --project-name=expendimonth --branch=main --commit-dirty=true`

@@ -1,6 +1,6 @@
 # Expendimonth
 
-Mobile-first PWA for tracking monthly **money in** and **money out** across the properties you manage (house, land, vehicle, business)—built for clear totals, history, charts, paper reconciliation, photo compare, printable reports and an optional PIN. Data stays in the browser (IndexedDB).
+Mobile-first PWA for tracking monthly **money in** and **money out** across the properties you manage (house, land, vehicle, business)—built for clear totals, history, charts, paper reconciliation, printable reports and an optional PIN. Data stays in the browser (IndexedDB).
 
 **Live:** [https://expendimonth.pages.dev](https://expendimonth.pages.dev)  
 **GitHub:** [github.com/TawfiqAhmedAbir/Expendimonth](https://github.com/TawfiqAhmedAbir/Expendimonth)
@@ -21,10 +21,7 @@ npm run build
 
 ## Deploy (Cloudflare Pages)
 
-Production deploys run on push to `main` via GitHub Actions (`.github/workflows/cloudflare-pages.yml`).
-
-1. Create a Cloudflare API token with **Cloudflare Pages — Edit** permission.
-2. Add it to the GitHub repo as secret `CLOUDFLARE_API_TOKEN`.
+Pushes to `main` build on Cloudflare Pages (`npm run build`, output `dist`).
 
 Manual deploy:
 
