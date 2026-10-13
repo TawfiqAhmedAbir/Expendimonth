@@ -1,13 +1,16 @@
 import { ArrowLeft, ListChecks, Lock, LockOpen, Minus, Plus, Printer, Share2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
+import { AmountKeypadSheet } from '../components/AmountKeypad'
 import { AmountPadSheet, type AmountPadResult } from '../components/AmountPadSheet'
 import { CloseMonthFlow } from '../components/CloseMonthFlow'
 import { HeroTotals } from '../components/HeroTotals'
 import { LastMonthChecklist } from '../components/LastMonthChecklist'
 import { LineItemRow } from '../components/LineItemRow'
 import { MonthCalendarStrip } from '../components/MonthCalendarStrip'
+import { MonthStartSheet } from '../components/MonthStartSheet'
 import { StandingItemsRow, standingLinePayload } from '../components/StandingItemsRow'
+import { TransferSheet } from '../components/TransferSheet'
 import { useToast } from '../components/Toast'
 import { InOutBars } from '../components/charts'
 import { CategoryEditSheet } from './CategoriesPage'
@@ -17,28 +20,32 @@ import {
   cashBalanceThrough,
   categorySpend,
   clampDateToMonth,
+  defaultOccurredOn,
   formatMoney,
   formatYearMonthLabel,
+  isFlowLine,
   net,
   previousYearMonth,
   reconcileMismatch,
   totalIn,
   totalOut,
+  visibleStatus,
 } from '../domain/calc'
-import type { LineItem, LineType, UserCategory } from '../domain/types'
+import type { LineItem, UserCategory } from '../domain/types'
 import { Badge, Button, Card, Chip, LinkButton, ProgressBar, Sheet } from '../design-kit/Primitives'
 import { ScreenShell } from '../design-kit/ScreenShell'
 import { useMonthLineActions } from '../hooks/useMonthLineActions'
+import { useMonthStart } from '../hooks/useMonthStart'
 import { t } from '../i18n'
 import { useActiveProperty, useAppData } from '../storage/AppDataContext'
 import { touchCategory } from '../storage/categories'
-import { addLines, getOrCreateMonth, setMonthReconcile, setMonthStatus } from '../storage/repository'
+import { addLine, addLines, addTransfer, getOrCreateMonth, setMonthReconcile, setMonthStatus } from '../storage/repository'
 
 export function MonthPage() {
   const { yearMonth = '' } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const property = useActiveProperty()
-  const { settings, monthsByYearMonth, linesByMonthId, categories, refresh } = useAppData()
+  const { settings, properties, monthsByYearMonth, linesByMonthId, categories, refresh } = useAppData()
   const { showToast } = useToast()
   const { saveLine, removeLine, addPrefilledLine } = useMonthLineActions(property.id, settings.locale)
   const locale = settings.locale
@@ -51,12 +58,16 @@ export function MonthPage() {
   const filterCategory = searchParams.get('category')
   const filterDay = searchParams.get('day')
 
-  const [pad, setPad] = useState<{ type: LineType; edit?: LineItem } | null>(null)
+  const [pad, setPad] = useState<{ type: 'in' | 'out'; edit?: LineItem } | null>(null)
   const [checklist, setChecklist] = useState(false)
   const [closing, setClosing] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
+  const [counting, setCounting] = useState(false)
+  const [moving, setMoving] = useState(false)
+  const [removing, setRemoving] = useState<LineItem | null>(null)
   const [editCat, setEditCat] = useState<UserCategory | null>(null)
   const [selectedDay, setSelectedDay] = useState<string | null>(filterDay)
+  const start = useMonthStart(property.id, yearMonth)
 
   useEffect(() => {
     if (!month && yearMonth) void getOrCreateMonth(property.id, yearMonth).then(() => refresh())
@@ -96,7 +107,9 @@ export function MonthPage() {
   const readOnly = month.status === 'done'
   const isEmpty = lines.length === 0
   const mismatch = reconcileMismatch(month, lines)
-  const haveNow = cashBalanceThrough([...monthsByYearMonth.values()], linesByMonthId, property.openingBalanceCents, yearMonth)
+  const haveNow = cashBalanceThrough([...monthsByYearMonth.values()], linesByMonthId, property.openingBalanceCents, yearMonth, property.openingAsOf ?? null)
+  const flowLines = lines.filter(isFlowLine)
+  const shownStatus = visibleStatus(month.status)
 
   function clearFilters() {
     setSearchParams({})
@@ -116,8 +129,57 @@ export function MonthPage() {
     setPad(null)
   }
 
+  async function saveCount(counted: number) {
+    const delta = counted - haveNow
+    setCounting(false)
+    if (delta === 0) {
+      showToast({ message: t('cash.same', locale) })
+      return
+    }
+    await addLine(month.id, {
+      type: 'adjust',
+      amountCents: delta,
+      categoryId: '',
+      note: '',
+      occurredOn: defaultOccurredOn(yearMonth),
+    })
+    await refresh()
+    showToast({ message: t('line.saved', locale) })
+  }
+
+  async function confirmStart(picked: typeof start.items) {
+    await addLines(month.id, picked.map((item) => ({
+      type: item.type,
+      amountCents: item.amountCents,
+      categoryId: item.categoryId,
+      note: item.note,
+      occurredOn: item.occurredOn,
+    })))
+    for (const item of picked) await touchCategory(item.categoryId, item.amountCents)
+    start.markSeen()
+    await refresh()
+  }
+
+  async function moveMoney(toPropertyId: string, amountCents: number) {
+    const result = await addTransfer({
+      fromPropertyId: property.id,
+      toPropertyId,
+      yearMonth,
+      amountCents,
+      note: '',
+    })
+    setMoving(false)
+    if (!result.ok) {
+      showToast({ message: t(result.reason === 'currency' ? 'transfer.currency' : 'transfer.closed', locale) })
+      return
+    }
+    await refresh()
+    showToast({ message: t('transfer.saved', locale) })
+  }
+
   async function shareMonth() {
-    const text = buildMonthShareText(property, yearMonth, month, lines, categories, locale)
+    const names = new Map(properties.map((p) => [p.id, p.name]))
+    const text = buildMonthShareText(property, yearMonth, month, lines, categories, locale, names)
     const ok = await sharePlainText(text, property.name)
     if (ok) showToast({ message: t('share.done', locale) })
     setMoreOpen(false)
@@ -133,9 +195,9 @@ export function MonthPage() {
           <h1 className="title" style={{ margin: 0 }}>{formatYearMonthLabel(yearMonth, locale)}</h1>
           <p className="caption" style={{ margin: 0 }}>{t('month.sub', locale)}</p>
         </div>
-        <Badge status={mismatch && !readOnly ? 'warn' : month.status}>
+        <Badge status={mismatch && !readOnly ? 'warn' : shownStatus}>
           {readOnly ? <Lock size={14} /> : null}
-          {mismatch && !readOnly ? t('months.filterMismatch', locale) : t(`status.${month.status}`, locale)}
+          {mismatch && !readOnly ? t('months.filterMismatch', locale) : t(`status.${shownStatus}`, locale)}
         </Badge>
       </div>
 
@@ -148,18 +210,15 @@ export function MonthPage() {
         </div>
       ) : null}
 
-      {isEmpty ? (
+      {lines.length === 0 ? (
         <Card variant="flat">
           <p className="muted" style={{ margin: 0 }}>{t('month.emptyPrompt', locale)}</p>
         </Card>
-      ) : (
+      ) : flowLines.length > 0 ? (
         <Card>
           <HeroTotals lines={lines} currencyCode={currency} locale={locale} />
-          <div style={{ marginTop: 'var(--s-4)' }}>
-            <InOutBars series={[{ yearMonth, inCents: totalIn(lines), outCents: totalOut(lines), netCents: net(lines) }]} currencyCode={currency} locale={locale} height={140} />
-          </div>
         </Card>
-      )}
+      ) : null}
 
       {!readOnly ? (
         <div className="row" style={{ margin: 'var(--s-4) 0' }}>
@@ -180,49 +239,14 @@ export function MonthPage() {
         />
       ) : null}
 
-      {!readOnly && prevLines.length > 0 ? (
-        <Button block onClick={() => setChecklist(true)} style={{ marginBottom: 'var(--s-4)' }}>
-          <ListChecks size={18} /> {t('month.startFromLast', locale)}
-        </Button>
-      ) : null}
-
-      {!isEmpty ? (
-        <Card variant="flat" style={{ marginBottom: 'var(--s-4)' }}>
-          <MonthCalendarStrip
-            yearMonth={yearMonth}
-            lines={lines}
-            currencyCode={currency}
-            locale={locale}
-            selectedDay={selectedDay}
-            onSelectDay={setDayFilter}
-          />
-        </Card>
-      ) : null}
-
-      {budgetRows.length > 0 ? (
-        <Card variant="flat" style={{ marginBottom: 'var(--s-4)' }}>
-          <h2 className="section" style={{ marginTop: 0 }}>{t('budget.title', locale)}</h2>
-          <div className="stack">
-            {budgetRows.map(({ cat, spent, budget }) => (
-              <div key={cat.id}>
-                <div className="row row--between" style={{ marginBottom: 'var(--s-1)' }}>
-                  <span>{cat.label}</span>
-                  <span className="caption">
-                    {formatMoney(spent, currency, locale)} / {formatMoney(budget, currency, locale)}
-                  </span>
-                </div>
-                <ProgressBar value={spent} max={budget} over={spent > budget} label={cat.label} />
-              </div>
-            ))}
-          </div>
-        </Card>
-      ) : null}
-
       <Card variant="flat" style={{ marginBottom: 'var(--s-4)' }}>
         <div className="row row--between">
           <span>{t('money.haveNow', locale)}</span>
           <strong className="money">{formatMoney(haveNow, currency, locale)}</strong>
         </div>
+        {!readOnly ? (
+          <Button size="sm" onClick={() => setCounting(true)} style={{ marginTop: 'var(--s-3)' }}>{t('cash.correct', locale)}</Button>
+        ) : null}
       </Card>
 
       {!isEmpty ? (
@@ -246,9 +270,16 @@ export function MonthPage() {
               categories={categories}
               currencyCode={currency}
               locale={locale}
+              counterpartyName={properties.find((p) => p.id === line.counterpartyPropertyId)?.name}
               readOnly={readOnly}
               highlight={filterCategory === line.categoryId}
-              onEdit={() => setPad({ type: line.type, edit: line })}
+              onEdit={() => {
+                if (line.type === 'adjust' || line.type === 'transfer') {
+                  setRemoving(line)
+                  return
+                }
+                setPad({ type: line.type, edit: line })
+              }}
             />
           ))}
           {visibleLines.length === 0 ? <p className="muted">{t('filter.noLines', locale)}</p> : null}
@@ -314,16 +345,93 @@ export function MonthPage() {
         onConfirm={async () => { await setMonthStatus(month.id, 'done'); await refresh() }}
       />
 
+      <AmountKeypadSheet
+        open={counting}
+        title={t('cash.countTitle', locale)}
+        locale={locale}
+        currencyCode={currency}
+        onClose={() => setCounting(false)}
+        onSave={(cents) => void saveCount(cents)}
+      />
+
+      <TransferSheet
+        open={moving}
+        locale={locale}
+        currencyCode={currency}
+        properties={properties}
+        currentId={property.id}
+        onClose={() => setMoving(false)}
+        onMove={(toId, cents) => void moveMoney(toId, cents)}
+      />
+
+      <MonthStartSheet
+        open={start.open}
+        locale={locale}
+        categories={categories}
+        items={start.items}
+        onClose={() => start.markSeen()}
+        onConfirm={(picked) => void confirmStart(picked)}
+      />
+
+      <Sheet open={Boolean(removing)} onClose={() => setRemoving(null)} title={t('line.removeTitle', locale)}>
+        {removing?.type === 'transfer' ? <p className="sub">{t('line.removePair', locale)}</p> : null}
+        <Button
+          variant="danger"
+          block
+          onClick={() => {
+            const line = removing
+            setRemoving(null)
+            if (line) void removeLine(line, month)
+          }}
+        >
+          {t('common.delete', locale)}
+        </Button>
+      </Sheet>
+
       <Sheet open={moreOpen} onClose={() => setMoreOpen(false)} title={t('month.moreOptions', locale)}>
         <div className="stack">
+          {flowLines.length > 0 ? (
+            <InOutBars series={[{ yearMonth, inCents: totalIn(lines), outCents: totalOut(lines), netCents: net(lines) }]} currencyCode={currency} locale={locale} height={140} />
+          ) : null}
+          {lines.length > 0 ? (
+            <MonthCalendarStrip
+              yearMonth={yearMonth}
+              lines={lines}
+              currencyCode={currency}
+              locale={locale}
+              selectedDay={selectedDay}
+              onSelectDay={(day) => { setDayFilter(day); setMoreOpen(false) }}
+            />
+          ) : null}
+          {budgetRows.length > 0 ? (
+            <div>
+              <h2 className="section" style={{ marginTop: 0 }}>{t('budget.title', locale)}</h2>
+              <div className="stack">
+                {budgetRows.map(({ cat, spent, budget }) => (
+                  <div key={cat.id}>
+                    <div className="row row--between" style={{ marginBottom: 'var(--s-1)' }}>
+                      <span>{cat.label}</span>
+                      <span className="caption">{formatMoney(spent, currency, locale)} / {formatMoney(budget, currency, locale)}</span>
+                    </div>
+                    <ProgressBar value={spent} max={budget} over={spent > budget} label={cat.label} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {!readOnly && prevLines.length > 0 ? (
+            <Button block onClick={() => { setMoreOpen(false); setChecklist(true) }}>
+              <ListChecks size={18} /> {t('month.startFromLast', locale)}
+            </Button>
+          ) : null}
+          {!readOnly && properties.length > 1 ? (
+            <Button block onClick={() => { setMoreOpen(false); setMoving(true) }}>
+              {t('transfer.action', locale)}
+            </Button>
+          ) : null}
           {readOnly ? (
             <Button block onClick={async () => { await setMonthStatus(month.id, 'open'); await refresh(); setMoreOpen(false) }}>
               <LockOpen size={18} /> {t('month.reopen', locale)}
-            </Button>
-          ) : null}
-          {!readOnly && !isEmpty && !mismatch && (month.reconcileInCents !== null || month.reconcileOutCents !== null) && month.status !== 'checked' ? (
-            <Button block onClick={async () => { await setMonthStatus(month.id, 'checked'); await refresh(); setMoreOpen(false) }}>
-              {t('status.checked', locale)}
             </Button>
           ) : null}
           <Button block onClick={() => void shareMonth()}>

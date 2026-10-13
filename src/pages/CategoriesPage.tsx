@@ -69,15 +69,19 @@ export function CategoryEditSheet({ category, locale, onClose, onSaved }: { cate
   const [label, setLabel] = useState(category?.label ?? '')
   const [icon, setIcon] = useState<string | null>(category?.icon ?? null)
   const [standing, setStanding] = useState(false)
+  const [standingType, setStandingType] = useState<'in' | 'out'>('out')
   const [standingAmount, setStandingAmount] = useState('')
+  const [dueDay, setDueDay] = useState('')
   const [budgetAmount, setBudgetAmount] = useState('')
   useEffect(() => {
     if (category) {
       setLabel(category.label)
       setIcon(category.icon)
       setStanding(Boolean(category.standing))
+      setStandingType(category.standingType === 'in' ? 'in' : 'out')
       const sa = category.standingAmountCents ?? category.lastAmountCents
       setStandingAmount(sa !== null && sa !== undefined ? centsToInput(sa) : '')
+      setDueDay(category.dueDay ? String(category.dueDay) : '')
       setBudgetAmount(category.budgetCents ? centsToInput(category.budgetCents) : '')
     }
   }, [category])
@@ -105,9 +109,21 @@ export function CategoryEditSheet({ category, locale, onClose, onSaved }: { cate
         </div>
       </div>
       {standing ? (
-        <Field label={t('standing.amount', locale)} htmlFor="stand-amt">
-          <input id="stand-amt" className="input" inputMode="decimal" value={standingAmount} onChange={(e) => setStandingAmount(e.target.value)} />
-        </Field>
+        <>
+          <div className="field">
+            <span className="field__label">{t('money.in', locale)} / {t('money.out', locale)}</span>
+            <div className="chips">
+              <Chip active={standingType === 'in'} onClick={() => setStandingType('in')}>{t('money.in', locale)}</Chip>
+              <Chip active={standingType === 'out'} onClick={() => setStandingType('out')}>{t('money.out', locale)}</Chip>
+            </div>
+          </div>
+          <Field label={t('standing.amount', locale)} htmlFor="stand-amt">
+            <input id="stand-amt" className="input" inputMode="decimal" value={standingAmount} onChange={(e) => setStandingAmount(e.target.value)} />
+          </Field>
+          <Field label={t('standing.dueDay', locale)} htmlFor="due-day">
+            <input id="due-day" className="input" inputMode="numeric" value={dueDay} onChange={(e) => setDueDay(e.target.value)} placeholder={t('standing.dueHint', locale)} />
+          </Field>
+        </>
       ) : null}
       <Field label={t('budget.limit', locale)} htmlFor="budget-amt">
         <input id="budget-amt" className="input" inputMode="decimal" value={budgetAmount} onChange={(e) => setBudgetAmount(e.target.value)} placeholder={t('budget.optional', locale)} />
@@ -120,11 +136,15 @@ export function CategoryEditSheet({ category, locale, onClose, onSaved }: { cate
           if (!category) return
           const standingAmountCents = standing && standingAmount.trim() ? parseMoneyToCents(standingAmount) : standing ? category.lastAmountCents : null
           const budgetCents = budgetAmount.trim() ? parseMoneyToCents(budgetAmount) : null
+          const parsedDay = Number.parseInt(dueDay, 10)
+          const due = standing && Number.isFinite(parsedDay) && parsedDay >= 1 && parsedDay <= 28 ? parsedDay : null
           await updateCategory(category.id, {
             label: label.trim(),
             icon,
             standing,
             standingAmountCents: standing ? standingAmountCents : null,
+            standingType: standing ? standingType : 'out',
+            dueDay: due,
             budgetCents,
           })
           await onSaved()

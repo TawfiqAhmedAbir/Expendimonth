@@ -32,7 +32,7 @@ export async function createCategory(propertyId: string, label: string): Promise
 
 export async function updateCategory(
   id: string,
-  patch: Partial<Pick<UserCategory, 'label' | 'icon' | 'standing' | 'standingAmountCents' | 'budgetCents'>>,
+  patch: Partial<Pick<UserCategory, 'label' | 'icon' | 'standing' | 'standingAmountCents' | 'standingType' | 'dueDay' | 'budgetCents'>>,
 ): Promise<void> {
   const db = await getDb()
   const cat = await db.get('categories', id)

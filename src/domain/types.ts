@@ -1,4 +1,4 @@
-export type LineType = 'in' | 'out'
+export type LineType = 'in' | 'out' | 'adjust' | 'transfer'
 
 export type MonthStatus = 'empty' | 'open' | 'checked' | 'done'
 
@@ -13,6 +13,8 @@ export type Property = {
   typeCustom: string
   currencyCode: string
   openingBalanceCents: number
+  /** Year-month the opening balance applies before. Null counts every month. */
+  openingAsOf: string | null
   color: string
   createdAt: number
 }
@@ -28,6 +30,8 @@ export type Settings = {
   coachDismissed: boolean
   remindersEnabled: boolean
   reminderLastFiredAt: number | null
+  /** `${propertyId}:${yearMonth}` once the start-month sheet was dismissed or confirmed. */
+  monthStartSeen: string | null
 }
 
 export type UserCategory = {
@@ -41,6 +45,10 @@ export type UserCategory = {
   useCount: number
   standing?: boolean
   standingAmountCents?: number | null
+  /** Money in or money out when this category repeats. Defaults to out. */
+  standingType?: 'in' | 'out'
+  /** Day of month (1–28) the standing amount is expected. */
+  dueDay?: number | null
   /** Soft monthly cap for money-out categories. */
   budgetCents?: number | null
 }
@@ -65,6 +73,10 @@ export type LineItem = {
   /** Calendar day the money moved, YYYY-MM-DD, inside the line's month. */
   occurredOn: string
   createdAt: number
+  /** Links the two sides of a property-to-property move. */
+  transferGroupId?: string
+  transferDirection?: 'in' | 'out'
+  counterpartyPropertyId?: string
 }
 
 export type AttachmentRecord = {
@@ -75,7 +87,7 @@ export type AttachmentRecord = {
 }
 
 export type BackupPayload = {
-  version: 4
+  version: 5
   exportedAt: string
   settings: Settings
   properties: Property[]

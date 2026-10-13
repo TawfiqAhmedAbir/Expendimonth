@@ -24,6 +24,8 @@
   "common.search": "Search",
   "common.loading": "Loading",
   "common.none": "None",
+  "common.on": "On",
+  "common.off": "Off",
 
   "setup.progress": "Step {current} of {total}",
   "setup.nameTitle": "What's your name?",
@@ -189,6 +191,9 @@
   "more.pinRemove": "Remove PIN",
   "more.pinOn": "PIN is on",
   "more.pinOff": "No PIN",
+  "more.pinHidesOnly": "A PIN hides the app on this phone. It does not lock the backup file.",
+  "more.backupReadable": "Anyone with the backup file can read it.",
+  "more.shareBackup": "Share",
   "more.data": "Your data",
   "more.export": "Save a backup file",
   "more.restore": "Restore a backup",
@@ -260,5 +265,33 @@
   "reminder.enable": "Gentle reminders",
   "reminder.note": "When you open the app — e.g. close last month or log spending.",
   "reminder.quietWeek": "You haven't added anything this week. A quick line keeps the month accurate.",
-  "reminder.openPrev": "Last month is still open. Close it when it matches your paper."
+  "reminder.openPrev": "Last month is still open. Close it when it matches your paper.",
+
+  "cash.correct": "Match cash",
+  "cash.countTitle": "The cash I have is",
+  "cash.correction": "Cash correction",
+  "cash.same": "That already matches.",
+
+  "start.title": "Start this month",
+  "start.sub": "Tick what still applies and adjust the amounts.",
+  "start.add": "Add {n} selected",
+  "start.dismiss": "Not now",
+
+  "expected.missingIn": "{category} is not in yet",
+  "expected.missingOut": "{category} is not paid yet",
+  "expected.add": "Add {amount}",
+
+  "standing.dueDay": "Expected by day",
+  "standing.dueHint": "1 to 28, optional",
+
+  "transfer.title": "Move money",
+  "transfer.action": "Move to another property",
+  "transfer.toName": "Moved to {name}",
+  "transfer.fromName": "Moved from {name}",
+  "transfer.currency": "Those two use different currencies, so they stay separate.",
+  "transfer.closed": "That month is closed. Reopen it first.",
+  "transfer.saved": "Money moved",
+
+  "line.removeTitle": "Remove this line?",
+  "line.removePair": "This also removes the matching line on the other property."
 }

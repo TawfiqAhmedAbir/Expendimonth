@@ -2,7 +2,7 @@ import { ArrowLeft, Printer, Share2 } from 'lucide-react'
 import { useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { getCategoryLabel } from '../domain/categories'
-import { formatMoney, formatOccurredOn, formatYearMonthLabel, monthlySeries, net, totalIn, totalOut, yearMonthsBack, yearSummary } from '../domain/calc'
+import { formatMoney, formatOccurredOn, formatYearMonthLabel, isFlowLine, monthlySeries, net, totalIn, totalOut, yearMonthsBack, yearSummary } from '../domain/calc'
 import { propertyTypeLabel } from '../domain/propertyTypes'
 import { Button, LinkButton } from '../design-kit/Primitives'
 import { ScreenShell } from '../design-kit/ScreenShell'
@@ -14,7 +14,7 @@ import { useActiveProperty, useAppData } from '../storage/AppDataContext'
 export function ReportPage() {
   const { scope = 'month', id = '' } = useParams()
   const property = useActiveProperty()
-  const { settings, monthsByYearMonth, linesByMonthId, categories } = useAppData()
+  const { settings, properties, monthsByYearMonth, linesByMonthId, categories } = useAppData()
   const { showToast } = useToast()
   const locale = settings.locale
   const currency = property.currencyCode
@@ -37,7 +37,8 @@ export function ReportPage() {
             <Button
               variant="ghost"
               onClick={() => {
-                const text = buildMonthShareText(property, id, month, lines, categories, locale)
+                const names = new Map(properties.map((p) => [p.id, p.name]))
+                const text = buildMonthShareText(property, id, month, lines, categories, locale, names)
                 void sharePlainText(text, property.name).then((ok) => { if (ok) showToast({ message: t('share.done', locale) }) })
               }}
             >
@@ -75,7 +76,7 @@ export function ReportPage() {
               </tr>
             </thead>
             <tbody>
-              {lines.map((l) => (
+              {lines.filter(isFlowLine).map((l) => (
                 <tr key={l.id} style={{ borderTop: '1px solid var(--border)' }}>
                   <td style={{ padding: '8px 0' }}>{l.occurredOn ? formatOccurredOn(l.occurredOn, locale) : ''}</td>
                   <td>{getCategoryLabel(l.categoryId, categories)}</td>
@@ -83,6 +84,23 @@ export function ReportPage() {
                   <td className={`money money--${l.type}`} style={{ textAlign: 'right' }}>{l.type === 'out' ? '−' : '+'}{formatMoney(l.amountCents, currency, locale)}</td>
                 </tr>
               ))}
+              {lines.filter((l) => !isFlowLine(l)).map((l) => {
+                const other = properties.find((p) => p.id === l.counterpartyPropertyId)?.name ?? ''
+                const label = l.type === 'adjust'
+                  ? t('cash.correction', locale)
+                  : t(l.transferDirection === 'in' ? 'transfer.fromName' : 'transfer.toName', locale, { name: other })
+                const amount = l.type === 'adjust'
+                  ? formatMoney(l.amountCents, currency, locale)
+                  : `${l.transferDirection === 'out' ? '−' : '+'}${formatMoney(l.amountCents, currency, locale)}`
+                return (
+                  <tr key={l.id} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td style={{ padding: '8px 0' }}>{l.occurredOn ? formatOccurredOn(l.occurredOn, locale) : ''}</td>
+                    <td>{label}</td>
+                    <td className="caption">{l.note}</td>
+                    <td className="money" style={{ textAlign: 'right' }}>{amount}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </>

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  averageMonthlyBurnCents,
   averageMonthlyOutCents,
   biggestCategoryChange,
   cashBalanceThrough,
+  cashEffect,
   categoryBreakdown,
   closedMonthStreak,
   clampDateToMonth,
@@ -11,6 +13,8 @@ import {
   deriveMonthStatus,
   evaluateAmountExpression,
   monthlySeries,
+  monthStartItems,
+  mostOverdueStanding,
   net,
   occurredOnFromCreatedAt,
   previousYearMonth,
@@ -23,7 +27,7 @@ import {
   yearMonthsBack,
   yearSummary,
 } from './calc'
-import type { LineItem, MonthRecord } from './types'
+import type { LineItem, MonthRecord, UserCategory } from './types'
 
 const lines = (items: Partial<LineItem>[], monthId = 'm1'): LineItem[] =>
   items.map((item, i) => ({
@@ -207,5 +211,79 @@ describe('series and summaries', () => {
     const b = categoryBreakdown(l, 'out')
     expect(b[0]).toEqual({ categoryId: 'a', cents: 300, share: 0.75 })
     expect(b.reduce((s, x) => s + x.share, 0)).toBeCloseTo(1)
+  })
+})
+
+describe('cash corrections and transfers', () => {
+  it('leaves adjust and transfer out of in, out and net, and in the cash effect', () => {
+    const l = lines([
+      { type: 'in', amountCents: 10_000 },
+      { type: 'out', amountCents: 4_000 },
+      { type: 'adjust', amountCents: -500 },
+      { type: 'transfer', amountCents: 2_000, transferDirection: 'out' },
+    ])
+    expect(totalIn(l)).toBe(10_000)
+    expect(totalOut(l)).toBe(4_000)
+    expect(net(l)).toBe(6_000)
+    expect(cashEffect(l)).toBe(3_500)
+  })
+
+  it('ignores months before openingAsOf', () => {
+    const months = [month('2026-01'), month('2026-10')]
+    const byId = new Map<string, LineItem[]>([
+      ['p:2026-01', lines([{ type: 'in', amountCents: 50_000 }], 'p:2026-01')],
+      ['p:2026-10', lines([{ type: 'out', amountCents: 1_000 }], 'p:2026-10')],
+    ])
+    expect(cashBalanceThrough(months, byId, 8_000, '2026-10', '2026-10')).toBe(7_000)
+    expect(cashBalanceThrough(months, byId, 8_000, '2026-10', null)).toBe(57_000)
+  })
+
+  it('hides runway when income covers spending', () => {
+    const covered = [
+      { yearMonth: '2026-01', inCents: 20_000, outCents: 10_000, netCents: 10_000 },
+      { yearMonth: '2026-02', inCents: 20_000, outCents: 10_000, netCents: 10_000 },
+    ]
+    expect(averageMonthlyBurnCents(covered)).toBeNull()
+    const burning = [
+      { yearMonth: '2026-01', inCents: 5_000, outCents: 15_000, netCents: -10_000 },
+      { yearMonth: '2026-02', inCents: 5_000, outCents: 15_000, netCents: -10_000 },
+    ]
+    expect(averageMonthlyBurnCents(burning)).toBe(10_000)
+    expect(runwayMonths(30_000, averageMonthlyBurnCents(burning))).toBe(3)
+  })
+})
+
+describe('month start and due day', () => {
+  const cat = (extra: Partial<UserCategory>): UserCategory => ({
+    id: 'rent',
+    propertyId: 'p',
+    label: 'Rent',
+    icon: null,
+    createdAt: 0,
+    lastUsedAt: 0,
+    lastAmountCents: null,
+    useCount: 1,
+    ...extra,
+  })
+
+  it('offers missing standing lines and skips ones already posted', () => {
+    const categories = [cat({ standing: true, standingType: 'in', standingAmountCents: 12_000 })]
+    const posted = lines([{ type: 'in', categoryId: 'rent', amountCents: 12_000 }])
+    expect(monthStartItems('2026-10', posted, [], categories)).toEqual([])
+    const offered = monthStartItems('2026-10', [], [], categories)
+    expect(offered).toHaveLength(1)
+    expect(offered[0]?.type).toBe('in')
+    expect(offered[0]?.amountCents).toBe(12_000)
+  })
+
+  it('names the earliest overdue standing item', () => {
+    const categories = [
+      cat({ id: 'wifi', label: 'Wifi', standing: true, standingType: 'out', standingAmountCents: 800, dueDay: 20 }),
+      cat({ standing: true, standingType: 'in', standingAmountCents: 12_000, dueDay: 5 }),
+    ]
+    const today = new Date(2026, 9, 13)
+    expect(mostOverdueStanding(categories, [], today)?.id).toBe('rent')
+    const paid = lines([{ type: 'in', categoryId: 'rent', amountCents: 12_000 }])
+    expect(mostOverdueStanding(categories, paid, today)).toBeNull()
   })
 })

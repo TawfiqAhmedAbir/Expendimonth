@@ -98,6 +98,7 @@ export function getDb(): Promise<ExpendiDatabase> {
             typeCustom: legacy?.propertyTypeCustom ?? '',
             currencyCode: legacy?.currencyCode ?? '',
             openingBalanceCents: legacy?.openingBalanceCents ?? 0,
+            openingAsOf: null,
             color: '#1f4f5e',
             createdAt: now,
           }

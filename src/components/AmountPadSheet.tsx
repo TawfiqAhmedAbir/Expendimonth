@@ -1,14 +1,14 @@
 import { Delete, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { centsToInput, clampDateToMonth, defaultOccurredOn, evaluateAmountExpression, formatMoney, monthDateBounds } from '../domain/calc'
-import type { LineItem, LineType, UserCategory } from '../domain/types'
+import type { LineItem, UserCategory } from '../domain/types'
 import { Button, Chip, Sheet } from '../design-kit/Primitives'
 import { haptic } from '../design-kit/motion'
 import { t } from '../i18n'
 import { CategoryIcon } from './CategoryIcon'
 
 export type AmountPadResult = {
-  type: LineType
+  type: 'in' | 'out'
   amountCents: number
   categoryId?: string
   newCategoryLabel?: string
@@ -19,7 +19,7 @@ export type AmountPadResult = {
 
 type Props = {
   open: boolean
-  type: LineType
+  type: 'in' | 'out'
   currencyCode: string
   locale: string
   categories: UserCategory[]

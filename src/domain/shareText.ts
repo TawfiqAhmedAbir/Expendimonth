@@ -1,5 +1,5 @@
 import { getCategoryLabel } from './categories'
-import { categoryBreakdown, formatMoney, formatYearMonthLabel, net, totalIn, totalOut } from './calc'
+import { categoryBreakdown, formatMoney, formatYearMonthLabel, isFlowLine, net, totalIn, totalOut } from './calc'
 import type { LineItem, MonthRecord, Property, UserCategory } from './types'
 import { t } from '../i18n'
 
@@ -10,6 +10,7 @@ export function buildMonthShareText(
   lines: LineItem[],
   categories: UserCategory[],
   locale: string,
+  propertyNameById: Map<string, string> = new Map(),
 ): string {
   const inC = totalIn(lines)
   const outC = totalOut(lines)
@@ -28,7 +29,16 @@ export function buildMonthShareText(
       linesOut.push(`${t('close.paperOut', locale)}: ${formatMoney(month.reconcileOutCents, property.currencyCode, locale)}`)
     }
   }
-  const top = categoryBreakdown(lines, 'out').slice(0, 3)
+  for (const line of lines) {
+    if (line.type === 'transfer') {
+      const name = propertyNameById.get(line.counterpartyPropertyId ?? '') ?? ''
+      const label = t(line.transferDirection === 'in' ? 'transfer.fromName' : 'transfer.toName', locale, { name })
+      linesOut.push(`${label}: ${formatMoney(line.amountCents, property.currencyCode, locale)}`)
+    } else if (line.type === 'adjust') {
+      linesOut.push(`${t('cash.correction', locale)}: ${formatMoney(line.amountCents, property.currencyCode, locale)}`)
+    }
+  }
+  const top = categoryBreakdown(lines.filter(isFlowLine), 'out').slice(0, 3)
   if (top.length) {
     linesOut.push('')
     linesOut.push(t('insights.where', locale) + ':')

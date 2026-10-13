@@ -1,4 +1,23 @@
-import type { LineItem, LineType, MonthRecord, MonthStatus } from './types'
+import type { LineItem, LineType, MonthRecord, MonthStatus, UserCategory } from './types'
+
+export function isFlowLine(line: LineItem): boolean {
+  return line.type === 'in' || line.type === 'out'
+}
+
+/** In minus out, plus corrections and transfers. Monthly "what's left" stays on net(). */
+export function cashEffect(lines: LineItem[]): number {
+  return lines.reduce((sum, line) => {
+    if (line.type === 'in') return sum + line.amountCents
+    if (line.type === 'out') return sum - line.amountCents
+    if (line.type === 'adjust') return sum + line.amountCents
+    if (line.type === 'transfer') return sum + (line.transferDirection === 'in' ? line.amountCents : -line.amountCents)
+    return sum
+  }, 0)
+}
+
+export function visibleStatus(status: MonthStatus): Exclude<MonthStatus, 'checked'> {
+  return status === 'checked' ? 'open' : status
+}
 
 export function totalIn(lines: LineItem[]): number {
   return lines.filter((l) => l.type === 'in').reduce((s, l) => s + l.amountCents, 0)
@@ -31,7 +50,7 @@ export function runningBalanceThrough(
 ): number {
   let balance = openingBalanceCents
   for (const ym of sortedYearMonths) {
-    balance += net(linesByYearMonth.get(ym) ?? [])
+    balance += cashEffect(linesByYearMonth.get(ym) ?? [])
     if (ym === throughYearMonth) break
   }
   return balance
@@ -43,11 +62,13 @@ export function cashBalanceThrough(
   linesByMonthId: Map<string, LineItem[]>,
   openingBalanceCents: number,
   throughYearMonth: string,
+  openingAsOf: string | null = null,
 ): number {
-  const sorted = months.map((m) => m.yearMonth).filter((ym) => ym <= throughYearMonth).sort()
+  const counts = (ym: string) => ym <= throughYearMonth && (!openingAsOf || ym >= openingAsOf)
+  const sorted = months.map((m) => m.yearMonth).filter(counts).sort()
   const byYm = new Map<string, LineItem[]>()
   for (const m of months) {
-    if (m.yearMonth <= throughYearMonth) byYm.set(m.yearMonth, linesByMonthId.get(m.id) ?? [])
+    if (counts(m.yearMonth)) byYm.set(m.yearMonth, linesByMonthId.get(m.id) ?? [])
   }
   return runningBalanceThrough(sorted, byYm, openingBalanceCents, throughYearMonth)
 }
@@ -108,6 +129,7 @@ export function biggestCategoryChange(current: LineItem[], previous: LineItem[])
   const totals = (list: LineItem[]) => {
     const map = new Map<string, { type: LineType; categoryId: string; cents: number }>()
     for (const l of list) {
+      if (!isFlowLine(l)) continue
       const key = `${l.type}:${l.categoryId}`
       const prev = map.get(key)
       if (prev) prev.cents += l.amountCents
@@ -314,6 +336,16 @@ export function reconcileMismatch(month: MonthRecord, lines: LineItem[]): boolea
   return false
 }
 
+/** Average spend minus income. Null when fewer than two active months, or when income covers spending. */
+export function averageMonthlyBurnCents(series: SeriesPoint[], lastN = 6): number | null {
+  const active = series.filter((p) => p.inCents > 0 || p.outCents > 0)
+  if (active.length < 2) return null
+  const slice = active.slice(-lastN)
+  const burn = slice.reduce((s, p) => s + (p.outCents - p.inCents), 0) / slice.length
+  if (burn <= 0) return null
+  return Math.round(burn)
+}
+
 /** Average money-out over months with out > 0, up to lastN most recent in series order. */
 export function averageMonthlyOutCents(series: SeriesPoint[], lastN = 6): number | null {
   const withOut = series.filter((p) => p.outCents > 0)
@@ -350,9 +382,89 @@ export function linesOnDay(lines: LineItem[], day: string): LineItem[] {
   return lines.filter((l) => l.occurredOn === day)
 }
 
+export function standingDirection(cat: UserCategory): 'in' | 'out' {
+  return cat.standingType === 'in' ? 'in' : 'out'
+}
+
+export function standingAmountCents(cat: UserCategory): number | null {
+  const amount = cat.standingAmountCents ?? cat.lastAmountCents
+  if (amount === null || amount === undefined || amount <= 0) return null
+  return amount
+}
+
+export type MonthStartItem = {
+  key: string
+  type: 'in' | 'out'
+  categoryId: string
+  amountCents: number
+  note: string
+  occurredOn: string
+}
+
+/** Standing lines still missing, plus last month's lines when this month has no in/out yet. */
+export function monthStartItems(
+  yearMonth: string,
+  lines: LineItem[],
+  previousLines: LineItem[],
+  categories: UserCategory[],
+): MonthStartItem[] {
+  const items: MonthStartItem[] = []
+  const seen = new Set<string>()
+  for (const cat of categories) {
+    if (!cat.standing) continue
+    const amount = standingAmountCents(cat)
+    if (amount === null) continue
+    const type = standingDirection(cat)
+    const key = `${type}:${cat.id}`
+    if (lines.some((l) => l.type === type && l.categoryId === cat.id)) continue
+    seen.add(key)
+    items.push({
+      key,
+      type,
+      categoryId: cat.id,
+      amountCents: amount,
+      note: '',
+      occurredOn: defaultOccurredOn(yearMonth),
+    })
+  }
+  const hasFlow = lines.some(isFlowLine)
+  if (!hasFlow) {
+    for (const line of previousLines) {
+      if (!isFlowLine(line)) continue
+      const key = `${line.type}:${line.categoryId}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      items.push({
+        key,
+        type: line.type as 'in' | 'out',
+        categoryId: line.categoryId,
+        amountCents: line.amountCents,
+        note: line.note,
+        occurredOn: clampDateToMonth(line.occurredOn, yearMonth),
+      })
+    }
+  }
+  return items
+}
+
+/** Earliest standing item whose due day has passed and is not yet recorded this month. */
+export function mostOverdueStanding(categories: UserCategory[], lines: LineItem[], today = new Date()): UserCategory | null {
+  const day = today.getDate()
+  const missed = categories.filter((cat) => {
+    if (!cat.standing || cat.dueDay == null || cat.dueDay < 1 || cat.dueDay > 28) return false
+    if (day < cat.dueDay) return false
+    if (standingAmountCents(cat) === null) return false
+    const type = standingDirection(cat)
+    return !lines.some((l) => l.type === type && l.categoryId === cat.id)
+  })
+  missed.sort((a, b) => (a.dueDay ?? 99) - (b.dueDay ?? 99))
+  return missed[0] ?? null
+}
+
 export function dayActivityMap(lines: LineItem[]): Map<string, { inCents: number; outCents: number }> {
   const map = new Map<string, { inCents: number; outCents: number }>()
   for (const l of lines) {
+    if (!isFlowLine(l)) continue
     const cur = map.get(l.occurredOn) ?? { inCents: 0, outCents: 0 }
     if (l.type === 'in') cur.inCents += l.amountCents
     else cur.outCents += l.amountCents

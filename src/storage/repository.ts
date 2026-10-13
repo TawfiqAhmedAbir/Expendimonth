@@ -5,7 +5,7 @@ import type {
   MonthRecord,
   MonthStatus,
 } from '../domain/types'
-import { clampDateToMonth, deriveMonthStatus, occurredOnFromCreatedAt } from '../domain/calc'
+import { clampDateToMonth, defaultOccurredOn, deriveMonthStatus, occurredOnFromCreatedAt } from '../domain/calc'
 import { getDb, monthIdFor } from './db'
 import { listProperties } from './properties'
 import { loadSettings, patchSettings, saveSettings } from './settings'
@@ -40,7 +40,25 @@ export async function getOrCreateMonth(propertyId: string, yearMonth: string): P
 export async function listMonths(propertyId: string): Promise<MonthRecord[]> {
   const db = await getDb()
   const all = await db.getAllFromIndex('months', 'by-propertyId', propertyId)
-  return all.sort((a, b) => a.yearMonth.localeCompare(b.yearMonth))
+  const normalized: MonthRecord[] = []
+  for (const month of all) {
+    if (month.status === 'checked') {
+      const next: MonthRecord = { ...month, status: 'open' }
+      await db.put('months', next)
+      normalized.push(next)
+    } else normalized.push(month)
+  }
+  return normalized.sort((a, b) => a.yearMonth.localeCompare(b.yearMonth))
+}
+
+/** Photos are no longer shown. Drop leftover blobs so they stop taking space. */
+export async function purgeAttachments(): Promise<void> {
+  const db = await getDb()
+  const keys = await db.getAllKeys('attachments')
+  if (keys.length === 0) return
+  const tx = db.transaction('attachments', 'readwrite')
+  await Promise.all(keys.map((key) => tx.store.delete(key)))
+  await tx.done
 }
 
 export async function getMonth(monthId: string): Promise<MonthRecord | undefined> {
@@ -137,19 +155,83 @@ export async function updateLine(line: LineItem): Promise<void> {
   if (prev && prev.monthId !== line.monthId) await refreshMonthStatus(prev.monthId)
 }
 
-export async function deleteLine(lineId: string): Promise<LineItem | undefined> {
+export async function deleteLine(lineId: string): Promise<LineItem[]> {
   const db = await getDb()
   const line = await db.get('lines', lineId)
-  if (!line) return undefined
-  await db.delete('lines', lineId)
-  await refreshMonthStatus(line.monthId)
-  return line
+  if (!line) return []
+  let victims: LineItem[] = [line]
+  if (line.transferGroupId) {
+    const all = await db.getAll('lines')
+    victims = all.filter((l) => l.transferGroupId === line.transferGroupId)
+  }
+  for (const victim of victims) await db.delete('lines', victim.id)
+  for (const monthId of new Set(victims.map((v) => v.monthId))) await refreshMonthStatus(monthId)
+  return victims
 }
 
 export async function restoreLine(line: LineItem): Promise<void> {
+  await restoreLines([line])
+}
+
+export async function restoreLines(items: LineItem[]): Promise<void> {
   const db = await getDb()
-  await db.put('lines', line)
-  await refreshMonthStatus(line.monthId)
+  for (const line of items) await db.put('lines', line)
+  for (const monthId of new Set(items.map((l) => l.monthId))) await refreshMonthStatus(monthId)
+}
+
+export type TransferResult = { ok: true } | { ok: false; reason: 'currency' | 'closed' | 'amount' | 'same' }
+
+/** Two linked lines: money leaves one property and arrives at the other. Not income or spending. */
+export async function addTransfer(input: {
+  fromPropertyId: string
+  toPropertyId: string
+  yearMonth: string
+  amountCents: number
+  note: string
+}): Promise<TransferResult> {
+  if (input.fromPropertyId === input.toPropertyId) return { ok: false, reason: 'same' }
+  if (input.amountCents <= 0) return { ok: false, reason: 'amount' }
+  const db = await getDb()
+  const from = await db.get('properties', input.fromPropertyId)
+  const to = await db.get('properties', input.toPropertyId)
+  if (!from || !to) return { ok: false, reason: 'same' }
+  if (from.currencyCode !== to.currencyCode) return { ok: false, reason: 'currency' }
+  const fromMonth = await getOrCreateMonth(input.fromPropertyId, input.yearMonth)
+  const toMonth = await getOrCreateMonth(input.toPropertyId, input.yearMonth)
+  if (fromMonth.status === 'done' || toMonth.status === 'done') return { ok: false, reason: 'closed' }
+  const groupId = crypto.randomUUID()
+  const occurredOn = defaultOccurredOn(input.yearMonth)
+  const base = Date.now()
+  const note = input.note.trim()
+  await db.put('lines', {
+    id: crypto.randomUUID(),
+    monthId: fromMonth.id,
+    type: 'transfer',
+    amountCents: input.amountCents,
+    categoryId: '',
+    note,
+    occurredOn,
+    createdAt: base,
+    transferGroupId: groupId,
+    transferDirection: 'out',
+    counterpartyPropertyId: input.toPropertyId,
+  })
+  await db.put('lines', {
+    id: crypto.randomUUID(),
+    monthId: toMonth.id,
+    type: 'transfer',
+    amountCents: input.amountCents,
+    categoryId: '',
+    note,
+    occurredOn,
+    createdAt: base + 1,
+    transferGroupId: groupId,
+    transferDirection: 'in',
+    counterpartyPropertyId: input.fromPropertyId,
+  })
+  await refreshMonthStatus(fromMonth.id)
+  await refreshMonthStatus(toMonth.id)
+  return { ok: true }
 }
 
 /** All lines for a property grouped by monthId. */
@@ -193,31 +275,21 @@ export async function deleteAttachment(monthId: string): Promise<void> {
 
 export async function buildBackup(): Promise<BackupPayload> {
   const db = await getDb()
-  const [properties, months, lines, categories, attachmentsRaw] = await Promise.all([
+  const [properties, months, lines, categories] = await Promise.all([
     listProperties(),
     db.getAll('months'),
     db.getAll('lines'),
     db.getAll('categories'),
-    db.getAll('attachments'),
   ])
-  const attachments = await Promise.all(
-    attachmentsRaw.map(async (a) => {
-      const bytes = new Uint8Array(await a.blob.arrayBuffer())
-      let binary = ''
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!)
-      return { monthId: a.monthId, mimeType: a.mimeType, base64: btoa(binary) }
-    }),
-  )
-  patchSettings({ lastExportAt: Date.now() })
   return {
-    version: 4,
+    version: 5,
     exportedAt: new Date().toISOString(),
     settings: loadSettings(),
     properties,
     categories,
     months,
     lines: lines.map(withOccurredOn),
-    attachments,
+    attachments: [],
   }
 }
 
@@ -225,10 +297,10 @@ export function parseBackup(raw: unknown): BackupPayload | null {
   if (!raw || typeof raw !== 'object') return null
   const p = raw as Partial<BackupPayload>
   const ver = p.version as number | undefined
-  if (ver !== 3 && ver !== 4) return null
+  if (ver !== 3 && ver !== 4 && ver !== 5) return null
   if (!p.settings || typeof p.settings !== 'object') return null
-  if (!Array.isArray(p.properties) || !Array.isArray(p.months) || !Array.isArray(p.lines) || !Array.isArray(p.categories) || !Array.isArray(p.attachments)) return null
-  return { ...(p as BackupPayload), version: 4 }
+  if (!Array.isArray(p.properties) || !Array.isArray(p.months) || !Array.isArray(p.lines) || !Array.isArray(p.categories)) return null
+  return { ...(p as BackupPayload), version: 5, attachments: Array.isArray(p.attachments) ? p.attachments : [] }
 }
 
 /** Replace everything on this phone with a version-3 backup file. */
@@ -242,18 +314,11 @@ export async function restoreBackup(payload: BackupPayload): Promise<void> {
     tx.objectStore('categories').clear(),
     tx.objectStore('attachments').clear(),
   ])
-  const attachments: AttachmentRecord[] = payload.attachments.map((a) => {
-    const binary = atob(a.base64)
-    const bytes = new Uint8Array(binary.length)
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-    return { monthId: a.monthId, mimeType: a.mimeType, blob: new Blob([bytes], { type: a.mimeType }), updatedAt: Date.now() }
-  })
   await Promise.all([
-    ...payload.properties.map((p) => tx.objectStore('properties').put(p)),
-    ...payload.months.map((m) => tx.objectStore('months').put(m)),
+    ...payload.properties.map((p) => tx.objectStore('properties').put({ ...p, openingAsOf: p.openingAsOf ?? null })),
+    ...payload.months.map((m) => tx.objectStore('months').put(m.status === 'checked' ? { ...m, status: 'open' as const } : m)),
     ...payload.lines.map((l) => tx.objectStore('lines').put(withOccurredOn(l))),
     ...payload.categories.map((c) => tx.objectStore('categories').put(c)),
-    ...attachments.map((a) => tx.objectStore('attachments').put(a)),
   ])
   await tx.done
   saveSettings(payload.settings)

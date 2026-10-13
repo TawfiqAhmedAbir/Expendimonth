@@ -7,6 +7,7 @@ import {
   closedMonthStreak,
   currentYearMonth,
   formatMoney,
+  visibleStatus,
   formatOccurredOn,
   formatYearMonthLabel,
   monthlySeries,
@@ -126,15 +127,16 @@ export function MonthsPage() {
                 const o = totalOut(lines)
                 const total = i + o || 1
                 const mismatch = reconcileMismatch(m, lines)
+                const shown = visibleStatus(m.status)
                 const idx = last12.indexOf(m.yearMonth)
                 const spark = monthlySeries(yearMonthsBack(m.yearMonth, 6), monthsByYearMonth, linesByMonthId)
                 return (
                   <Link key={m.id} to={`/month/${m.yearMonth}`} className="card mcard">
                     <div className="row row--between">
                       <strong>{formatYearMonthLabel(m.yearMonth, locale)}</strong>
-                      <Badge status={mismatch && m.status !== 'done' ? 'warn' : m.status}>
-                        {m.status === 'done' ? <Lock size={12} /> : null}
-                        {mismatch && m.status !== 'done' ? t('months.filterMismatch', locale) : t(`status.${m.status}`, locale)}
+                      <Badge status={mismatch && shown !== 'done' ? 'warn' : shown}>
+                        {shown === 'done' ? <Lock size={12} /> : null}
+                        {mismatch && shown !== 'done' ? t('months.filterMismatch', locale) : t(`status.${shown}`, locale)}
                       </Badge>
                     </div>
                     <div className="row row--between" style={{ marginTop: 'var(--s-3)' }}>

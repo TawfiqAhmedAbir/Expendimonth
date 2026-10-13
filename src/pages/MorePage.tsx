@@ -5,23 +5,23 @@ import { PinPad } from '../components/PinPad'
 import { useToast } from '../components/Toast'
 import { currentYearMonth } from '../domain/calc'
 import type { BackupPayload } from '../domain/types'
-import { Button, Card, Sheet } from '../design-kit/Primitives'
+import { Button, Card, Field, Sheet } from '../design-kit/Primitives'
 import { ScreenShell } from '../design-kit/ScreenShell'
 import { t } from '../i18n'
 import { hashPin, makeSalt, markUnlocked } from '../security/pin'
 import { useAppData } from '../storage/AppDataContext'
 import { parseBackup } from '../storage/repository'
 
-const NINETY_DAYS = 90 * 86_400_000
+const THIRTY_DAYS = 30 * 86_400_000
 
 export function BackupNudge() {
   const { settings, exportBackup, months, linesByMonthId } = useAppData()
   const locale = settings.locale
   const allLines = months.flatMap((m) => linesByMonthId.get(m.id) ?? [])
   if (allLines.length === 0) return null
-  // Never exported: nudge once the oldest entry is 90 days old. Exported before: nudge 90 days after that.
+  // Never exported: nudge once the oldest entry is 30 days old. Exported before: nudge 30 days after that.
   const anchor = settings.lastExportAt ?? Math.min(...allLines.map((l) => l.createdAt))
-  if (Date.now() - anchor < NINETY_DAYS) return null
+  if (Date.now() - anchor < THIRTY_DAYS) return null
   return (
     <div className="insight insight--warn row row--between" style={{ marginBottom: 'var(--s-4)' }}>
       <span>{t('nudge.backup', locale)}</span>
@@ -44,14 +44,25 @@ function RowLink({ to, icon, label, hint }: { to: string; icon: React.ReactNode;
 }
 
 export function MorePage() {
-  const { settings, updateSettings, exportBackup, restoreBackup, properties, categories } = useAppData()
+  const { settings, updateSettings, exportBackup, shareBackup, restoreBackup, properties, categories } = useAppData()
   const { showToast } = useToast()
   const locale = settings.locale
   const [pinStep, setPinStep] = useState<'idle' | 'set' | 'confirm'>('idle')
   const [firstPin, setFirstPin] = useState('')
   const [pinError, setPinError] = useState<string | null>(null)
   const [pendingBackup, setPendingBackup] = useState<BackupPayload | null>(null)
+  const [name, setName] = useState(settings.userName)
   const hasPin = Boolean(settings.pinHash)
+
+  function saveName(value: string) {
+    const next = value.trim()
+    if (!next) {
+      setName(settings.userName)
+      return
+    }
+    setName(next)
+    if (next !== settings.userName) updateSettings({ userName: next })
+  }
 
   async function onPin(p: string) {
     if (pinStep === 'set') {
@@ -83,6 +94,21 @@ export function MorePage() {
       <BackupNudge />
 
       <Card>
+        <Field label={t('setup.userName', locale)} htmlFor="more-name">
+          <input
+            id="more-name"
+            className="input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={(e) => saveName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+            }}
+          />
+        </Field>
+      </Card>
+
+      <Card>
         <RowLink to="/properties" icon={<Building2 size={20} />} label={t('more.properties', locale)} hint={`${properties.length}`} />
         {properties.length > 1 ? <RowLink to="/portfolio" icon={<Layers size={20} />} label={t('portfolio.title', locale)} /> : null}
         <RowLink to="/categories" icon={<Tags size={20} />} label={t('more.categories', locale)} hint={`${categories.length}`} />
@@ -107,7 +133,7 @@ export function MorePage() {
               updateSettings({ remindersEnabled: next })
             }}
           >
-            {settings.remindersEnabled ? 'On' : 'Off'}
+            {settings.remindersEnabled ? t('common.on', locale) : t('common.off', locale)}
           </Button>
         </div>
       </Card>
@@ -118,7 +144,7 @@ export function MorePage() {
           <span className="line__icon">{settings.theme === 'dark' ? <Moon size={20} /> : <Sun size={20} />}</span>
           <span className="grow line__title">{t('more.dark', locale)}</span>
           <Button size="sm" variant={settings.theme === 'dark' ? 'primary' : 'ghost'} onClick={() => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' })} aria-pressed={settings.theme === 'dark'}>
-            {settings.theme === 'dark' ? 'On' : 'Off'}
+            {settings.theme === 'dark' ? t('common.on', locale) : t('common.off', locale)}
           </Button>
         </div>
       </Card>
@@ -129,6 +155,7 @@ export function MorePage() {
           <span className="line__icon"><KeyRound size={20} /></span>
           <span className="grow">
             <span className="line__title" style={{ display: 'block' }}>{hasPin ? t('more.pinOn', locale) : t('more.pinOff', locale)}</span>
+            <span className="line__note">{t('more.pinHidesOnly', locale)}</span>
           </span>
           <Button size="sm" onClick={() => { setPinError(null); setPinStep('set') }}>{hasPin ? t('more.pinChange', locale) : t('more.pinSet', locale)}</Button>
           {hasPin ? (
@@ -147,6 +174,7 @@ export function MorePage() {
             <span className="line__title" style={{ display: 'block' }}>{t('more.export', locale)}</span>
             <span className="line__note">{lastBackup ? t('more.lastBackup', locale, { when: lastBackup }) : t('more.neverBackedUp', locale)}</span>
           </span>
+          <Button size="sm" onClick={() => void shareBackup()}>{t('more.shareBackup', locale)}</Button>
           <Button size="sm" variant="primary" onClick={() => void exportBackup()}>{t('common.save', locale)}</Button>
         </div>
         <div className="line">
@@ -178,7 +206,7 @@ export function MorePage() {
         <RowLink to={`/report/month/${currentYearMonth()}`} icon={<Printer size={20} />} label={t('more.printMonth', locale)} />
         <div className="line">
           <span className="line__icon"><ShieldCheck size={20} /></span>
-          <span className="grow caption">{t('more.localOnly', locale)}</span>
+          <span className="grow caption">{t('more.localOnly', locale)} {t('more.backupReadable', locale)}</span>
         </div>
       </Card>
 

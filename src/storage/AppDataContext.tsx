@@ -10,8 +10,8 @@ import {
 import type { BackupPayload, LineItem, MonthRecord, Property, Settings, UserCategory } from '../domain/types'
 import { listCategories } from './categories'
 import { listProperties } from './properties'
-import { buildBackup, getLinesGrouped, listMonths, restoreBackup as writeBackup } from './repository'
-import { loadSettings, saveSettings } from './settings'
+import { buildBackup, getLinesGrouped, listMonths, purgeAttachments, restoreBackup as writeBackup } from './repository'
+import { loadSettings, patchSettings, saveSettings } from './settings'
 
 type AppDataContextValue = {
   ready: boolean
@@ -26,6 +26,7 @@ type AppDataContextValue = {
   updateSettings: (patch: Partial<Settings>) => void
   setActiveProperty: (id: string) => void
   exportBackup: () => Promise<void>
+  shareBackup: () => Promise<void>
   restoreBackup: (payload: BackupPayload) => Promise<void>
 }
 
@@ -40,6 +41,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [linesByMonthId, setLinesByMonthId] = useState<Map<string, LineItem[]>>(new Map())
 
   const refresh = useCallback(async () => {
+    await purgeAttachments()
     const current = loadSettings()
     const props = await listProperties()
     let activeId = current.activePropertyId
@@ -98,17 +100,49 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [refresh, updateSettings],
   )
 
-  const exportBackup = useCallback(async () => {
+  const makeBackupFile = useCallback(async () => {
     const payload = await buildBackup()
+    const filename = `expendimonth-backup-${new Date().toISOString().slice(0, 10)}.json`
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    return { blob, filename }
+  }, [])
+
+  const downloadBlob = useCallback((blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `expendimonth-backup-${new Date().toISOString().slice(0, 10)}.json`
+    a.download = filename
     a.click()
     URL.revokeObjectURL(url)
+  }, [])
+
+  const markExported = useCallback(() => {
+    patchSettings({ lastExportAt: Date.now() })
     setSettings(loadSettings())
   }, [])
+
+  const exportBackup = useCallback(async () => {
+    const { blob, filename } = await makeBackupFile()
+    downloadBlob(blob, filename)
+    markExported()
+  }, [downloadBlob, makeBackupFile, markExported])
+
+  const shareBackup = useCallback(async () => {
+    const { blob, filename } = await makeBackupFile()
+    const file = new File([blob], filename, { type: 'application/json' })
+    const canShare = typeof navigator.share === 'function' && (typeof navigator.canShare !== 'function' || navigator.canShare({ files: [file] }))
+    if (canShare) {
+      try {
+        await navigator.share({ files: [file], title: filename })
+        markExported()
+        return
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return
+      }
+    }
+    downloadBlob(blob, filename)
+    markExported()
+  }, [downloadBlob, makeBackupFile, markExported])
 
   const restoreBackup = useCallback(async (payload: BackupPayload) => {
     await writeBackup(payload)
@@ -140,6 +174,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateSettings,
       setActiveProperty,
       exportBackup,
+      shareBackup,
       restoreBackup,
     }),
     [
@@ -155,6 +190,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateSettings,
       setActiveProperty,
       exportBackup,
+      shareBackup,
       restoreBackup,
     ],
   )

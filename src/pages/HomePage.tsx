@@ -1,24 +1,32 @@
 import { ArrowRight, BarChart3, CalendarDays, Layers, Minus, Plus, Wallet } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { AmountKeypadSheet } from '../components/AmountKeypad'
 import { AmountPadSheet, type AmountPadResult } from '../components/AmountPadSheet'
 import { HeroTotals } from '../components/HeroTotals'
+import { MonthStartSheet } from '../components/MonthStartSheet'
 import { ReminderBanner } from '../components/ReminderBanner'
+import { standingLinePayload } from '../components/StandingItemsRow'
+import { useToast } from '../components/Toast'
 import { getCategoryLabel } from '../domain/categories'
 import {
-  averageMonthlyOutCents,
+  averageMonthlyBurnCents,
   biggestCategoryChange,
   cashBalanceThrough,
   closedMonthStreak,
   compareNetToPreviousMonth,
   currentYearMonth,
+  defaultOccurredOn,
   formatMoney,
   formatYearMonthLabel,
   monthlySeries,
+  mostOverdueStanding,
   net,
   previousYearMonth,
   runwayMonths,
+  standingAmountCents,
   totalIn,
   totalOut,
+  visibleStatus,
   yearMonthsBack,
   type CategoryChange,
 } from '../domain/calc'
@@ -26,10 +34,12 @@ import { Badge, Button, Card, LinkButton, ProgressBar, StatRing, Tile } from '..
 import { useCountUp } from '../design-kit/motion'
 import { ScreenShell } from '../design-kit/ScreenShell'
 import { useMonthLineActions } from '../hooks/useMonthLineActions'
+import { useMonthStart } from '../hooks/useMonthStart'
 import { t } from '../i18n'
+import { touchCategory } from '../storage/categories'
 import { useActiveProperty, useAppData } from '../storage/AppDataContext'
 import { evaluateReminders, fireSystemNotification } from '../storage/reminders'
-import { getOrCreateMonth } from '../storage/repository'
+import { addLine, addLines, getOrCreateMonth } from '../storage/repository'
 
 function categoryTone(change: CategoryChange): string {
   const up = change.deltaCents > 0
@@ -47,13 +57,16 @@ function relativeDay(ts: number, locale: string): string {
 export function HomePage() {
   const property = useActiveProperty()
   const { settings, properties, months, monthsByYearMonth, linesByMonthId, categories, refresh, updateSettings } = useAppData()
-  const { saveLine } = useMonthLineActions(property.id, settings.locale)
+  const { saveLine, addPrefilledLine } = useMonthLineActions(property.id, settings.locale)
+  const { showToast } = useToast()
   const locale = settings.locale
   const currency = property.currencyCode
   const ym = currentYearMonth()
   const month = monthsByYearMonth.get(ym)
   const [pad, setPad] = useState<'in' | 'out' | null>(null)
+  const [counting, setCounting] = useState(false)
   const [reminderDismissed, setReminderDismissed] = useState(false)
+  const start = useMonthStart(property.id, ym)
 
   useEffect(() => {
     if (!month) void getOrCreateMonth(property.id, ym).then(() => refresh())
@@ -82,8 +95,9 @@ export function HomePage() {
     return latest
   }, [lines])
 
-  const status = month?.status ?? 'empty'
-  const haveNow = cashBalanceThrough([...monthsByYearMonth.values()], linesByMonthId, property.openingBalanceCents, ym)
+  const status = visibleStatus(month?.status ?? 'empty')
+  const haveNow = cashBalanceThrough([...monthsByYearMonth.values()], linesByMonthId, property.openingBalanceCents, ym, property.openingAsOf ?? null)
+  const due = useMemo(() => mostOverdueStanding(categories, lines), [categories, lines])
 
   const categoryMove = useMemo(() => {
     const prevYm = previousYearMonth(ym)
@@ -93,8 +107,8 @@ export function HomePage() {
   }, [ym, monthsByYearMonth, linesByMonthId, lines])
 
   const series = useMemo(() => monthlySeries(yearMonthsBack(ym, 12), monthsByYearMonth, linesByMonthId), [ym, monthsByYearMonth, linesByMonthId])
-  const avgOut = averageMonthlyOutCents(series)
-  const runway = runwayMonths(haveNow, avgOut)
+  const burn = averageMonthlyBurnCents(series)
+  const runway = runwayMonths(haveNow, burn)
   const streak = closedMonthStreak(months, property.id, ym)
 
   const reminder = useMemo(() => {
@@ -113,6 +127,47 @@ export function HomePage() {
       return
     }
     setPad(type)
+  }
+
+  async function saveCount(counted: number) {
+    const m = month ?? (await getOrCreateMonth(property.id, ym))
+    const delta = counted - haveNow
+    setCounting(false)
+    if (delta === 0) {
+      showToast({ message: t('cash.same', locale) })
+      return
+    }
+    await addLine(m.id, {
+      type: 'adjust',
+      amountCents: delta,
+      categoryId: '',
+      note: '',
+      occurredOn: defaultOccurredOn(ym),
+    })
+    await refresh()
+    showToast({ message: t('line.saved', locale) })
+  }
+
+  async function addDue() {
+    if (!due) return
+    const amount = standingAmountCents(due)
+    if (amount === null || month?.status === 'done') return
+    const m = month ?? (await getOrCreateMonth(property.id, ym))
+    await addPrefilledLine(m, standingLinePayload(due, amount, ym))
+  }
+
+  async function confirmStart(picked: typeof start.items) {
+    const m = month ?? (await getOrCreateMonth(property.id, ym))
+    await addLines(m.id, picked.map((item) => ({
+      type: item.type,
+      amountCents: item.amountCents,
+      categoryId: item.categoryId,
+      note: item.note,
+      occurredOn: item.occurredOn,
+    })))
+    for (const item of picked) await touchCategory(item.categoryId, item.amountCents)
+    start.markSeen()
+    await refresh()
   }
 
   async function onSave(data: AmountPadResult) {
@@ -137,6 +192,15 @@ export function HomePage() {
         <ReminderBanner text={reminder.text} onDismiss={() => setReminderDismissed(true)} />
       ) : null}
 
+      {due && month?.status !== 'done' ? (
+        <div className="insight insight--warn row row--between" style={{ marginBottom: 'var(--s-4)' }}>
+          <span>{t(due.standingType === 'in' ? 'expected.missingIn' : 'expected.missingOut', locale, { category: due.label })}</span>
+          <Button size="sm" variant="primary" onClick={() => void addDue()}>
+            {t('expected.add', locale, { amount: formatMoney(standingAmountCents(due) ?? 0, currency, locale) })}
+          </Button>
+        </div>
+      ) : null}
+
       <Card>
         <div style={{ display: 'grid', placeItems: 'center', padding: 'var(--s-2) 0 var(--s-4)' }}>
           <StatRing ratio={isEmpty ? 0 : ratio} tone={ratio > 1 ? 'out' : 'accent'} size={200}>
@@ -155,6 +219,9 @@ export function HomePage() {
             <span>{t('money.haveNow', locale)}</span>
             <span className="money">{formatMoney(haveNow, currency, locale)}</span>
           </div>
+          {month?.status !== 'done' ? (
+            <Button size="sm" onClick={() => setCounting(true)} style={{ marginTop: 'var(--s-3)' }}>{t('cash.correct', locale)}</Button>
+          ) : null}
         </div>
         {runway !== null ? (
           <div style={{ marginTop: 'var(--s-4)' }}>
@@ -183,8 +250,14 @@ export function HomePage() {
         <p className="caption" style={{ margin: 'var(--s-4) 0 0', textAlign: 'center' }}>
           {last
             ? t('home.lastActivity', locale, {
-                amount: formatMoney(last.amountCents, currency, locale),
-                category: getCategoryLabel(last.categoryId, categories),
+                amount: formatMoney(Math.abs(last.amountCents), currency, locale),
+                category: last.type === 'adjust'
+                  ? t('cash.correction', locale)
+                  : last.type === 'transfer'
+                    ? t(last.transferDirection === 'in' ? 'transfer.fromName' : 'transfer.toName', locale, {
+                        name: properties.find((p) => p.id === last.counterpartyPropertyId)?.name ?? '',
+                      })
+                    : getCategoryLabel(last.categoryId, categories),
                 when: relativeDay(last.createdAt, locale),
               })
             : t('home.noActivity', locale)}
@@ -235,6 +308,24 @@ export function HomePage() {
           <Tile to="/portfolio" icon={<Layers size={24} />} label={t('portfolio.tile', locale)} hint={t('portfolio.tileHint', locale)} />
         ) : null}
       </div>
+
+      <AmountKeypadSheet
+        open={counting}
+        title={t('cash.countTitle', locale)}
+        locale={locale}
+        currencyCode={currency}
+        onClose={() => setCounting(false)}
+        onSave={(cents) => void saveCount(cents)}
+      />
+
+      <MonthStartSheet
+        open={start.open}
+        locale={locale}
+        categories={categories}
+        items={start.items}
+        onClose={() => start.markSeen()}
+        onConfirm={(picked) => void confirmStart(picked)}
+      />
 
       <AmountPadSheet
         open={pad !== null}

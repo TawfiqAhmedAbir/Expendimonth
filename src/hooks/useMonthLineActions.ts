@@ -6,7 +6,7 @@ import type { LineItem, MonthRecord } from '../domain/types'
 import { t } from '../i18n'
 import { createCategory, touchCategory } from '../storage/categories'
 import { useAppData } from '../storage/AppDataContext'
-import { addLine, deleteLine, getOrCreateMonth, restoreLine, setMonthStatus, updateLine } from '../storage/repository'
+import { addLine, deleteLine, getOrCreateMonth, restoreLines, setMonthStatus, updateLine } from '../storage/repository'
 
 type SaveContext = {
   yearMonth: string
@@ -55,9 +55,9 @@ export function useMonthLineActions(propertyId: string, locale: string) {
       const removed = await deleteLine(line.id)
       if (month.status === 'checked') await setMonthStatus(month.id, 'open')
       await refresh()
-      if (removed) {
+      if (removed.length > 0) {
         showUndo(t('line.deleted', locale), t('common.undo', locale), async () => {
-          await restoreLine(removed)
+          await restoreLines(removed)
           await refresh()
         })
       }

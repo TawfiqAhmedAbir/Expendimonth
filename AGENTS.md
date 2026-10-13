@@ -19,7 +19,8 @@ Mobile-first PWA for a non-technical user (large type, plain language) to track 
 
 ## Current focus
 
-- Design overhaul (3 phases) shipped and deployed to https://expendimonth.pages.dev
+- Weakness fixes and five features are in the working tree: quieter month screen, cash match, start-month sheet, expected-by-day, property transfers, 30-day backup with Share
+- Not deployed yet
 - Next candidates: French strings (`src/i18n/fr.json`), real-device PWA install test
 
 ## Decisions already made
@@ -39,6 +40,11 @@ Mobile-first PWA for a non-technical user (large type, plain language) to track 
 - Dark mode via `[data-theme='dark']`; font Manrope; icons lucide-react
 - Sheets portal to `document.body` (topbar `backdrop-filter` would otherwise trap `position: fixed`)
 - Currency shown with narrow symbol (৳, €, £…), tabular numerals
+- PIN hides the app on this phone only. It does not encrypt IndexedDB or the backup file
+- `openingAsOf` on new properties: months before that date do not change “money you have now”. Older properties stay `null` (every month counts)
+- Line types `adjust` and `transfer` change cash only. They stay out of money in, money out, and what’s left
+- Backup export is version 5. Versions 3 and 4 still restore. Photo blobs are dropped
+- `checked` months are saved as `open`. Closed stays closed
 
 ## Tools & connections
 

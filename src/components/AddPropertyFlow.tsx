@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { parseMoneyToCents } from '../domain/calc'
+import { currentYearMonth, parseMoneyToCents } from '../domain/calc'
 import { CURRENCIES, PROPERTY_TYPE_OPTIONS } from '../domain/propertyTypes'
 import type { Property, PropertyType } from '../domain/types'
 import { Button, Card, Chip, Field, Steps } from '../design-kit/Primitives'
@@ -41,6 +41,7 @@ export function AddPropertyFlow({ locale, stepOffset = 0, totalSteps = 3, onDone
       typeCustom: type === 'other' ? typeCustom.trim() : '',
       currencyCode,
       openingBalanceCents: opening.trim() ? parseMoneyToCents(opening) ?? 0 : 0,
+      openingAsOf: currentYearMonth(),
       color,
     })
   }

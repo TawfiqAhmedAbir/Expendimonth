@@ -1,5 +1,5 @@
 import { CategoryIcon } from './CategoryIcon'
-import { defaultOccurredOn } from '../domain/calc'
+import { defaultOccurredOn, standingDirection } from '../domain/calc'
 import type { UserCategory } from '../domain/types'
 import { Chip } from '../design-kit/Primitives'
 import { t } from '../i18n'
@@ -41,7 +41,7 @@ export function StandingItemsRow({ categories, locale, onAdd }: Props) {
 
 export function standingLinePayload(cat: UserCategory, amountCents: number, yearMonth: string) {
   return {
-    type: 'out' as const,
+    type: standingDirection(cat),
     amountCents,
     categoryId: cat.id,
     note: '',
